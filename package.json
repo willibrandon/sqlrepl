@@ -33,8 +33,10 @@
     "views": {
       "replicationExplorer": [
         {
-          "id": "replicationServers",
-          "name": "Servers"
+          "id": "replicationTree",
+          "name": "SQL Servers",
+          "icon": "media/replication-icon.svg",
+          "contextualTitle": "SQL Server Replication"
         }
       ]
     },
@@ -48,8 +50,28 @@
         "command": "sqlrepl.addConnection",
         "title": "Add SQL Server Connection",
         "category": "SQL Replication"
+      },
+      {
+        "command": "sqlrepl.refreshTree",
+        "title": "Refresh",
+        "category": "SQL Replication",
+        "icon": "$(refresh)"
       }
-    ]
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "sqlrepl.addConnection",
+          "when": "view == replicationTree",
+          "group": "navigation"
+        },
+        {
+          "command": "sqlrepl.refreshTree",
+          "when": "view == replicationTree",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

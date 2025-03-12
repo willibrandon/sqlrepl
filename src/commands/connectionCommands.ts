@@ -91,6 +91,9 @@ export class ConnectionCommands {
             // Show success message
             vscode.window.showInformationMessage(`Successfully added connection to ${serverName}`);
 
+            // Refresh the tree view
+            await vscode.commands.executeCommand('sqlrepl.refreshTree');
+
             // TODO: Validate connection (will be implemented when we add SQL client)
 
         } catch (error) {
