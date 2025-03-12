@@ -26,12 +26,12 @@ Each chunk below references relevant design document sections for quick cross-ch
 ## 1. Repository Setup
 
 ### Goals
-- Create a new GitHub repository (e.g., `sql-server-replication-extension`).
+- Create a new GitHub repository (e.g., `sqlrepl`).
 - Initialize the project structure.
 
 ### Tasks
 1. **Create GitHub Repository**  
-   - Name it `sql-server-replication-extension` (or your chosen name).  
+   - Name it `sqlrepl` (or your chosen name).  
    - Add a standard `.gitignore` for Node/TypeScript projects.
 
 2. **Clone Locally & Initialize**  
