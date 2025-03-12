@@ -1,24 +1,64 @@
 {
   "name": "sqlrepl",
-  "version": "1.0.0",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs",
-    "test": "test"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "displayName": "SQL Server Replication Manager",
+  "description": "Manage SQL Server Replication directly from VS Code",
+  "version": "0.0.1",
+  "publisher": "sqlrepl",
+  "private": true,
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/willibrandon/sqlrepl.git"
+    "url": "https://github.com/willibrandon/sqlrepl.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/willibrandon/sqlrepl/issues"
+  "engines": {
+    "vscode": "^1.85.0"
   },
-  "homepage": "https://github.com/willibrandon/sqlrepl#readme",
-  "description": ""
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:replicationExplorer"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "replicationExplorer",
+          "title": "Replication",
+          "icon": "media/replication-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "replicationExplorer": [
+        {
+          "id": "replicationServers",
+          "name": "Servers"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "sqlrepl.showWelcomeMessage",
+        "title": "Show Welcome Message",
+        "category": "SQL Replication"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.0.0",
+    "vsce": "^2.15.0",
+    "vscode-test": "^1.6.1"
+  }
 }
