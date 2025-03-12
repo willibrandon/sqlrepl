@@ -1,61 +1,75 @@
 import * as vscode from 'vscode';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface SqlServerConnection {
     id: string;
     serverName: string;
+    database?: string;
     authentication: 'windows' | 'sql';
     username?: string;
-    database?: string;
+    password?: string;
 }
 
 export class ConnectionService {
     private static instance: ConnectionService;
-    private connections: Map<string, SqlServerConnection>;
-    private context: vscode.ExtensionContext;
+    private connections: SqlServerConnection[];
 
-    private constructor(context: vscode.ExtensionContext) {
-        this.connections = new Map<string, SqlServerConnection>();
-        this.context = context;
-        this.loadConnections();
+    private constructor(private context: vscode.ExtensionContext) {
+        this.connections = this.loadConnections();
     }
 
-    public static getInstance(context: vscode.ExtensionContext): ConnectionService {
+    public static getInstance(context?: vscode.ExtensionContext): ConnectionService {
         if (!ConnectionService.instance) {
+            if (!context) {
+                throw new Error('Context must be provided when creating ConnectionService instance');
+            }
             ConnectionService.instance = new ConnectionService(context);
         }
         return ConnectionService.instance;
     }
 
-    private async loadConnections() {
-        const storedConnections = await this.context.secrets.get('sqlConnections');
-        if (storedConnections) {
-            const parsed = JSON.parse(storedConnections);
-            parsed.forEach((conn: SqlServerConnection) => {
-                this.connections.set(conn.id, conn);
-            });
-        }
+    private loadConnections(): SqlServerConnection[] {
+        return this.context.globalState.get<SqlServerConnection[]>('sqlConnections', []);
     }
 
-    private async saveConnections() {
-        const connectionsArray = Array.from(this.connections.values());
-        await this.context.secrets.store('sqlConnections', JSON.stringify(connectionsArray));
-    }
-
-    public async addConnection(connection: SqlServerConnection): Promise<void> {
-        this.connections.set(connection.id, connection);
-        await this.saveConnections();
-    }
-
-    public async removeConnection(id: string): Promise<void> {
-        this.connections.delete(id);
-        await this.saveConnections();
+    private saveConnections(): void {
+        this.context.globalState.update('sqlConnections', this.connections);
     }
 
     public getConnections(): SqlServerConnection[] {
-        return Array.from(this.connections.values());
+        return [...this.connections];
     }
 
     public getConnection(id: string): SqlServerConnection | undefined {
-        return this.connections.get(id);
+        return this.connections.find(conn => conn.id === id);
+    }
+
+    public addConnection(connection: Omit<SqlServerConnection, 'id'>): SqlServerConnection {
+        const newConnection: SqlServerConnection = {
+            ...connection,
+            id: uuidv4()
+        };
+        this.connections.push(newConnection);
+        this.saveConnections();
+        return newConnection;
+    }
+
+    public removeConnection(id: string): void {
+        this.connections = this.connections.filter(conn => conn.id !== id);
+        this.saveConnections();
+    }
+
+    public updateConnection(id: string, connection: Partial<SqlServerConnection>): SqlServerConnection {
+        const index = this.connections.findIndex(conn => conn.id === id);
+        if (index === -1) {
+            throw new Error(`Connection with id ${id} not found`);
+        }
+
+        this.connections[index] = {
+            ...this.connections[index],
+            ...connection
+        };
+        this.saveConnections();
+        return this.connections[index];
     }
 } 

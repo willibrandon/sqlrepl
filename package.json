@@ -56,6 +56,12 @@
         "title": "Refresh",
         "category": "SQL Replication",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "sqlrepl.createPublication",
+        "title": "Create Publication",
+        "category": "SQL Replication",
+        "icon": "$(add)"
       }
     ],
     "menus": {
@@ -70,6 +76,13 @@
           "when": "view == replicationTree",
           "group": "navigation"
         }
+      ],
+      "view/item/context": [
+        {
+          "command": "sqlrepl.createPublication",
+          "when": "view == replicationTree && viewItem == publications",
+          "group": "inline"
+        }
       ]
     }
   },
@@ -82,14 +95,17 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
+    "@types/mssql": "^9.1.5",
     "@types/node": "^20.0.0",
     "@types/uuid": "^9.0.8",
     "@types/vscode": "^1.85.0",
-    "typescript": "^5.0.0",
+    "typescript": "^5.3.3",
     "vsce": "^2.15.0",
     "vscode-test": "^1.6.1"
   },
   "dependencies": {
+    "@azure/core-auth": "^1.9.0",
+    "mssql": "^10.0.2",
     "uuid": "^9.0.1"
   }
 }
