@@ -43,6 +43,11 @@
         "command": "sqlrepl.showWelcomeMessage",
         "title": "Show Welcome Message",
         "category": "SQL Replication"
+      },
+      {
+        "command": "sqlrepl.addConnection",
+        "title": "Add SQL Server Connection",
+        "category": "SQL Replication"
       }
     ]
   },
@@ -56,9 +61,13 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/uuid": "^9.0.8",
     "@types/vscode": "^1.85.0",
     "typescript": "^5.0.0",
     "vsce": "^2.15.0",
     "vscode-test": "^1.6.1"
+  },
+  "dependencies": {
+    "uuid": "^9.0.1"
   }
 }
