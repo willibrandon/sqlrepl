@@ -127,7 +127,7 @@ export class AgentTreeItem extends vscode.TreeItem {
         super(agent.name, collapsibleState);
         
         // Determine agent-specific status
-        const statusIcon = agent.isRunning ? '$(sync~spin)' : agent.enabled ? '$(circle-large-outline)' : '$(circle-slash)';
+        const statusIcon = agent.isRunning ? '⟳' : agent.enabled ? '●' : '○';
         const statusText = agent.isRunning ? 'Running' : agent.enabled ? 'Idle' : 'Disabled';
         
         // Create a detailed tooltip with all available information
