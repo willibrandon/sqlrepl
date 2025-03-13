@@ -90,7 +90,7 @@ export class AgentService {
                     WHERE step_id = 0  -- job outcome
                     GROUP BY job_id
                 ) h ON j.job_id = h.job_id
-                WHERE c.name IN ('REPL-Distribution', 'REPL-LogReader')
+                WHERE c.name IN ('REPL-Distribution', 'REPL-LogReader', 'REPL-Snapshot')
                 ORDER BY j.name
             `);
 
