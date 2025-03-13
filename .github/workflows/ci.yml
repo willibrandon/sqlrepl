@@ -10,6 +10,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          SA_PASSWORD: YourStrong@Passw0rd
+        ports:
+          - 1433:1433
+
     steps:
     - uses: actions/checkout@v4
     
@@ -19,53 +28,13 @@ jobs:
         node-version: '20'
         cache: 'npm'
 
-    - name: Start SQL Server
-      run: |
-        docker run -e "ACCEPT_EULA=Y" \
-                  -e "SA_PASSWORD=YourStrong@Passw0rd" \
-                  -e "MSSQL_PID=Developer" \
-                  -p 1433:1433 \
-                  --name sql1 \
-                  -d mcr.microsoft.com/mssql/server:2022-latest
-
-        echo "Waiting for SQL Server to start..."
-        for i in {1..60}; do
-          # Check if container is still running
-          if ! docker ps | grep sql1 > /dev/null; then
-            echo "SQL Server container stopped unexpectedly"
-            docker logs sql1
-            exit 1
-          fi
-          
-          # Try to connect
-          if docker exec sql1 /opt/mssql-tools/bin/sqlcmd \
-             -S localhost -U sa -P "YourStrong@Passw0rd" \
-             -Q "SELECT @@VERSION" > /dev/null 2>&1; then
-            echo "SQL Server is ready"
-            break
-          fi
-          
-          echo "Attempt $i: SQL Server not ready yet..."
-          if [ $i -eq 60 ]; then
-            echo "Timed out waiting for SQL Server"
-            docker logs sql1
-            exit 1
-          fi
-          sleep 5
-        done
-
     - name: Install dependencies
       run: npm ci
 
     - name: Setup test database
       run: |
-        docker exec sql1 /opt/mssql-tools/bin/sqlcmd \
-          -S localhost -U sa -P "YourStrong@Passw0rd" \
-          -Q "CREATE DATABASE TestDB;"
-        
-        docker exec sql1 /opt/mssql-tools/bin/sqlcmd \
-          -S localhost -U sa -P "YourStrong@Passw0rd" -d TestDB \
-          -Q "CREATE TABLE TestTable (Id INT); INSERT INTO TestTable VALUES (1), (2);"
+        /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd' \
+          -Q "CREATE DATABASE TestDB; USE TestDB; CREATE TABLE TestTable (Id INT); INSERT INTO TestTable VALUES (1), (2);"
 
     - name: Run tests
       run: npm test
