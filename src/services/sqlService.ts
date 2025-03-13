@@ -1,6 +1,11 @@
 import * as sql from 'mssql';
 import { SqlServerConnection } from './connectionService';
 
+// Type for stored procedure parameters that can handle all SQL Server data types
+type SqlProcedureParams = {
+    [key: string]: string | number | boolean | Date | Buffer | null | undefined;
+};
+
 export class SqlService {
     private static instance: SqlService;
     private pools: Map<string, sql.ConnectionPool>;
@@ -151,7 +156,7 @@ export class SqlService {
     public async executeProcedure<T>(
         connection: SqlServerConnection, 
         procedure: string, 
-        params?: { [key: string]: any }
+        params?: SqlProcedureParams
     ): Promise<T[]> {
         try {
             const pool = await this.getPool(connection);
