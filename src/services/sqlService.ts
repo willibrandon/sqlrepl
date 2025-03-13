@@ -5,7 +5,7 @@ export class SqlService {
     private static instance: SqlService;
     private pools: Map<string, sql.ConnectionPool>;
 
-    private constructor() {
+    protected constructor() {
         this.pools = new Map<string, sql.ConnectionPool>();
     }
 
@@ -16,35 +16,82 @@ export class SqlService {
         return SqlService.instance;
     }
 
-    private getConnectionConfig(connection: SqlServerConnection): sql.config {
-        console.log('Attempting to connect with server:', connection.serverName);
+    // For testing purposes
+    public static createTestInstance(): SqlService {
+        return new SqlService();
+    }
 
-        // Split server name and port if provided in format server,port
-        const [server, port] = connection.serverName.split(',');
+    // Made protected for testing
+    protected getConnectionConfig(connection: SqlServerConnection | string): sql.config {
+        // First check if connection is undefined
+        if (!connection) {
+            throw new Error('Connection parameter cannot be undefined');
+        }
 
-        // Create a cross-platform compatible config
-        const config: sql.config = {
-            server: server,
-            port: port ? parseInt(port, 10) : undefined,  // Ensure base 10 parsing
-            database: connection.database || 'master',
-            options: {
-                trustServerCertificate: true, // For development/testing
-                encrypt: true, // For security
-                port: port ? parseInt(port, 10) : undefined,  // Also set port in options
-                enableArithAbort: true // Add this for better compatibility
-            }
-        };
+        let config: sql.config;
 
-        // Add authentication details
-        if (connection.authentication === 'windows') {
-            config.options = {
-                ...config.options,
-                trustedConnection: true,
-                enableArithAbort: true
+        // Check string first since it's our most common case for testing
+        if (typeof connection === 'string') {
+            // Parse connection string
+            const params = new Map<string, string>();
+            connection.split(';').forEach(pair => {
+                const [key, value] = pair.split('=');
+                if (key && value) {
+                    params.set(key.trim().toLowerCase(), value.trim());
+                }
+            });
+
+            // Create connection config from string
+            const serverAndPort = (params.get('server') || '').split(',');
+            const server = serverAndPort[0];
+            const port = serverAndPort[1] ? parseInt(serverAndPort[1], 10) : undefined;
+
+            console.log('Attempting to connect with server:', server);
+
+            config = {
+                server,
+                port,
+                database: params.get('database') || 'master',
+                user: params.get('user id'),
+                password: params.get('password'),
+                options: {
+                    trustServerCertificate: params.get('trustservercertificate')?.toLowerCase() === 'true',
+                    encrypt: true,
+                    enableArithAbort: true
+                }
             };
+        } else if ('serverName' in connection && typeof connection.serverName === 'string') {
+            // Handle SqlServerConnection object with type guard for serverName
+            console.log('Attempting to connect with server:', connection.serverName);
+
+            // Split server name and port if provided in format server,port
+            const [server, port] = connection.serverName.split(',');
+
+            // Create a cross-platform compatible config
+            config = {
+                server: server,
+                port: port ? parseInt(port, 10) : undefined,
+                database: connection.database || 'master',
+                options: {
+                    trustServerCertificate: true,
+                    encrypt: true,
+                    port: port ? parseInt(port, 10) : undefined,
+                    enableArithAbort: true
+                }
+            };
+
+            // Add authentication details
+            if (connection.authentication === 'windows') {
+                config.options = {
+                    ...config.options,
+                    trustedConnection: true
+                };
+            } else {
+                config.user = connection.username;
+                config.password = connection.password;
+            }
         } else {
-            config.user = connection.username;
-            config.password = connection.password;
+            throw new Error('Invalid connection parameter: must be either a connection string or SqlServerConnection object');
         }
 
         // Log the config (with masked password)
@@ -55,6 +102,13 @@ export class SqlService {
         console.log('Connection config (masked):', JSON.stringify(maskedConfig, null, 2));
 
         return config;
+    }
+
+    // Made public for testing
+    public async createPool(config: sql.config): Promise<sql.ConnectionPool> {
+        const pool = new sql.ConnectionPool(config);
+        await pool.connect();
+        return pool;
     }
 
     private getPoolKey(connection: SqlServerConnection): string {
