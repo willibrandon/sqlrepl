@@ -459,6 +459,55 @@ export class ReplicationService {
         }
     }
 
+    // Add this helper method to verify subscription existence
+    private async verifySubscriptionExists(connection: SqlServerConnection, subscription: Subscription): Promise<boolean> {
+        try {
+            // Check if subscription still exists in SQL Server
+            const result = await this.sqlService.executeQuery<{ exists: number }>(connection, `
+                DECLARE @exists INT = 0
+                
+                -- First check the MSsubscriptions table if we have distributor access
+                IF DB_ID('distribution') IS NOT NULL
+                BEGIN
+                    SELECT @exists = COUNT(*)
+                    FROM distribution.dbo.MSsubscriptions sub
+                    JOIN distribution.dbo.MSarticles a ON sub.article_id = a.article_id
+                    JOIN distribution.dbo.MSpublications p ON a.publication_id = p.publication_id
+                    WHERE p.name = '${subscription.publication}'
+                    AND sub.subscriber_db = '${subscription.subscriberDb}'
+                    AND sub.status = 1 -- Only active subscriptions
+                END
+                
+                -- If we didn't find it, try using stored procedures
+                IF @exists = 0
+                BEGIN
+                    BEGIN TRY
+                        EXEC sp_helpsubscription 
+                            @publication = '${subscription.publication}',
+                            @publisher = '${subscription.publisher}',
+                            @destination_db = '${subscription.subscriberDb}',
+                            @active_only = 1
+                            
+                        -- If we get here without error, the subscription exists
+                        SET @exists = 1
+                    END TRY
+                    BEGIN CATCH
+                        -- If error, the subscription might not exist
+                        SET @exists = 0
+                    END CATCH
+                END
+                
+                -- Return the result
+                SELECT @exists AS exists
+            `);
+            
+            return result && result.length > 0 && result[0].exists > 0;
+        } catch (error) {
+            console.error(`Error verifying subscription ${subscription.name}:`, error);
+            return false;
+        }
+    }
+
     public async getSubscriptions(connection: SqlServerConnection): Promise<Subscription[]> {
         try {
             // Get all user databases
@@ -472,7 +521,7 @@ export class ReplicationService {
             const databases = databasesResult.map(db => db.name);
             console.log(`Found ${databases.length} user databases to check for subscriptions on ${connection.serverName}`);
             
-            const allSubscriptions: Subscription[] = [];
+            let allSubscriptions: Subscription[] = [];
             
             // First, check the distributor info
             const distInfo = await this.getDistributorInfo(connection);
@@ -492,6 +541,7 @@ export class ReplicationService {
                         USE [${distInfo.distributionDb}]
                         
                         -- Direct query to get complete subscription information
+                        -- Only include active subscriptions (status = 1)
                         SELECT DISTINCT
                             a.publisher_db,
                             p.name as publication,
@@ -505,6 +555,7 @@ export class ReplicationService {
                             SELECT publisher_id FROM dbo.MSpublishers 
                             WHERE name = '${connection.serverName}'
                         )
+                        AND sub.status = 1 -- Only active subscriptions
                     `) || [];
                     
                     if (localSubs.length > 0) {
@@ -604,7 +655,7 @@ export class ReplicationService {
                                 subscriber: string;
                                 subscriber_db: string;
                                 status: string;
-                            }>(connection, `EXEC sp_helpsubscription`) || [];
+                            }>(connection, `EXEC sp_helpsubscription @active_only = 1`) || [];
                             
                             if (subscriptions.length > 0) {
                                 const mappedSubscriptions = subscriptions.map(sub => ({
@@ -631,7 +682,7 @@ export class ReplicationService {
                                 publisher: string;
                                 publisher_db: string;
                                 publication: string;
-                            }>(connection, `EXEC sp_helppullsubscription`) || [];
+                            }>(connection, `EXEC sp_helppullsubscription @active_only = 1`) || [];
                             
                             if (pullSubscriptions.length > 0) {
                                 const mappedPullSubscriptions = pullSubscriptions.map(sub => ({
@@ -684,8 +735,19 @@ export class ReplicationService {
                 }
             }
             
-            console.log(`Retrieved ${allSubscriptions.length} total subscriptions from ${connection.serverName}`);
-            return allSubscriptions;
+            // Verify each subscription actually exists before returning it
+            const verifiedSubscriptions: Subscription[] = [];
+            for (const sub of allSubscriptions) {
+                const exists = await this.verifySubscriptionExists(connection, sub);
+                if (exists) {
+                    verifiedSubscriptions.push(sub);
+                } else {
+                    console.log(`Filtering out subscription ${sub.name} that appears to be dropped`);
+                }
+            }
+            
+            console.log(`Retrieved ${verifiedSubscriptions.length} verified subscriptions from ${connection.serverName}`);
+            return verifiedSubscriptions;
         } catch (error) {
             console.error('Failed to get subscriptions:', error);
             return [];

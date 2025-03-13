@@ -141,6 +141,8 @@ export class AgentService {
                 
                 if (category.includes('logreader')) {
                     type = AgentType.LogReaderAgent;
+                } else if (category.includes('snapshot')) {
+                    type = AgentType.SnapshotAgent;
                 } else if (category.includes('distribution')) {
                     type = AgentType.DistributionAgent;
                 } else {
