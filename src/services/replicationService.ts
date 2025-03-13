@@ -167,6 +167,12 @@ export class ReplicationService {
             status: 'active'
         });
 
+        // Create a Snapshot Agent job for the publication (this was missing)
+        await this.sqlService.executeProcedure(connection, 'sp_addpublication_snapshot', {
+            publication: options.name,
+            publisher_security_mode: 1  // Windows Authentication
+        });
+
         // Set the working directory for snapshot files
         await this.sqlService.executeProcedure(connection, 'sp_changepublication', {
             publication: options.name,
