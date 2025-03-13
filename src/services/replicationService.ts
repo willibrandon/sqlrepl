@@ -4,6 +4,56 @@ import { SqlService } from './sqlService';
 export type ReplicationType = 'snapshot' | 'transactional';
 export type SubscriptionType = 'push' | 'pull';
 
+// Interface for raw publication data from SQL Server
+interface RawPublication {
+    name: string;
+    description: string;
+    status: string;
+    immediate_sync: boolean;
+    enabled_for_internet: boolean;
+    allow_push: boolean;
+    allow_pull: boolean;
+    allow_anonymous: boolean;
+    immediate_sync_ready: boolean;
+    allow_sync_tran: boolean;
+    'replication frequency': number;  // SQL Server column name contains a space
+    [key: string]: unknown;  // Allow other properties
+}
+
+// Base interface for stored procedure parameters
+interface StoredProcParams {
+    [key: string]: string | number | boolean | Date | Buffer | null | undefined;
+}
+
+// Interface for sp_addsubscription parameters
+interface AddSubscriptionParams extends StoredProcParams {
+    publication: string;
+    subscriber: string;
+    destination_db: string;
+    subscription_type: 'push' | 'pull';
+    sync_type: 'none' | 'automatic' | 'replication support only';
+}
+
+// Interface for sp_addpushsubscription_agent parameters
+interface AddPushSubscriptionParams extends StoredProcParams {
+    publication: string;
+    subscriber: string;
+    subscriber_db: string;
+    job_login?: string;
+    job_password?: string;
+    subscriber_security_mode?: number;
+}
+
+// Interface for sp_addpullsubscription_agent parameters
+interface AddPullSubscriptionParams extends StoredProcParams {
+    publication: string;
+    publisher: string;
+    publisher_db: string;
+    job_login?: string;
+    job_password?: string;
+    publisher_security_mode?: number;
+}
+
 export interface PublicationOptions {
     name: string;
     type: ReplicationType;
@@ -326,7 +376,7 @@ export class ReplicationService {
                 try {
                     console.log(`Checking publications in database: ${dbName}`);
                     
-                    const dbPublications = await this.sqlService.executeQuery<Publication>(connection, `
+                    const dbPublications = await this.sqlService.executeQuery<RawPublication>(connection, `
                         USE [${dbName}]
                         EXEC sp_helppublication
                     `) || [];
@@ -337,25 +387,33 @@ export class ReplicationService {
                         // 0 = Transactional, 1 = Snapshot
                         let type: ReplicationType;
                         
-                        // Use type assertion to access the property with spaces
-                        const pubAny = pub as any;
-                        
                         // IMPORTANT: The SQL column name is 'replication frequency' with a space
                         //            replication frequency=0 means Transactional
                         //            replication frequency=1 means Snapshot
-                        if (pubAny['replication frequency'] === 0) {
+                        if (pub['replication frequency'] === 0) {
                             type = 'transactional';
                             console.log(`Publication ${pub.name} is TRANSACTIONAL (replication frequency=0)`);
                         } else {
                             type = 'snapshot';
-                            console.log(`Publication ${pub.name} is SNAPSHOT (replication frequency=${pubAny['replication frequency']})`);
+                            console.log(`Publication ${pub.name} is SNAPSHOT (replication frequency=${pub['replication frequency']})`);
                         }
                         
-                        return {
-                            ...pub,
-                            database: dbName,
-                            type: type
+                        const publication: Publication = {
+                            name: pub.name,
+                            description: pub.description,
+                            type: type,
+                            status: pub.status,
+                            immediate_sync: pub.immediate_sync,
+                            enabled_for_internet: pub.enabled_for_internet,
+                            allow_push: pub.allow_push,
+                            allow_pull: pub.allow_pull,
+                            allow_anonymous: pub.allow_anonymous,
+                            immediate_sync_ready: pub.immediate_sync_ready,
+                            allow_sync_tran: pub.allow_sync_tran,
+                            database: dbName
                         };
+                        
+                        return publication;
                     });
                     
                     allPublications.push(...publicationsWithDb);
@@ -397,23 +455,19 @@ export class ReplicationService {
             `);
 
             // Set up parameters for sp_addsubscription
-            const params: any = {
+            const params: AddSubscriptionParams = {
                 publication: options.publicationName,
                 subscriber: options.subscriberServer,
                 destination_db: options.subscriberDatabase,
-                subscription_type: options.type === 'push' ? 'push' : 'pull'
+                subscription_type: options.type === 'push' ? 'push' : 'pull',
+                sync_type: 'automatic' // Default value
             };
             
             // Map our user-friendly sync_type values to SQL Server's expected values
             if (options.syncType === 'immediate') {
-                // Use none for immediate initialization
                 params.sync_type = 'none';
             } else if (options.syncType === 'manual') {
-                // Use replication support only for manual initialization
                 params.sync_type = 'replication support only';
-            } else {
-                // Default is 'automatic'
-                params.sync_type = 'automatic';
             }
             
             // Add the subscription
@@ -422,7 +476,7 @@ export class ReplicationService {
             // Add the subscription agent job based on type
             if (options.type === 'push') {
                 // For push subscriptions
-                const pushParams: any = {
+                const pushParams: AddPushSubscriptionParams = {
                     publication: options.publicationName,
                     subscriber: options.subscriberServer,
                     subscriber_db: options.subscriberDatabase
@@ -438,7 +492,7 @@ export class ReplicationService {
                 await this.sqlService.executeProcedure(connection, 'sp_addpushsubscription_agent', pushParams);
             } else {
                 // For pull subscriptions
-                const pullParams: any = {
+                const pullParams: AddPullSubscriptionParams = {
                     publication: options.publicationName,
                     publisher: options.publisherServer,
                     publisher_db: options.publisherDatabase
