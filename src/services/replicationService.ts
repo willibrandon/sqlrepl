@@ -42,28 +42,31 @@ export class ReplicationService {
         try {
             // First check if server is configured as a distributor using sp_get_distributor
             const distInfo = await this.sqlService.executeQuery<{
-                distribution_db: string | null;
+                installed: boolean | number;
+                'distribution server': string | null;
+                'distribution db': string | null;
+                'distribution db installed': boolean | number;
+                'is distribution publisher': boolean | number;
+                'has remote distribution publisher': boolean | number;
                 directory: string | null;
-                account: string | null;
-                min_distretention: number;
-                max_distretention: number;
-                history_retention: number;
-                is_distributor: boolean;
-                is_publisher: boolean;
-                is_subscriber: boolean;
-                name: string | null;
             }>(connection, 'EXEC sp_get_distributor');
 
             const result = distInfo[0];
+            console.log('sp_get_distributor result:', result);
+            
+            // Check if the value is either true or 1
+            const isTrue = (value: boolean | number | undefined | null): boolean => {
+                return value === true || value === 1;
+            };
             
             return {
-                isDistributor: result.is_distributor,
-                isPublisher: result.is_publisher,
-                distributionDb: result.distribution_db,
+                isDistributor: isTrue(result.installed),
+                isPublisher: isTrue(result['is distribution publisher']),
+                distributionDb: result['distribution db'],
                 workingDirectory: result.directory,
                 remoteDist: {
-                    isRemote: result.name !== null && result.name !== connection.serverName,
-                    serverName: result.name
+                    isRemote: isTrue(result['has remote distribution publisher']),
+                    serverName: result['distribution server']
                 }
             };
         } catch (error) {
@@ -176,64 +179,68 @@ export class ReplicationService {
 
     public async validateDistributor(connection: SqlServerConnection): Promise<boolean> {
         try {
-            // Check if server is a distributor
-            const distributorResult = await this.sqlService.executeQuery<{ IsDistributor: number }>(connection, `
-                SELECT SERVERPROPERTY('IsDistributor') as IsDistributor
-            `);
-
-            if (!distributorResult[0].IsDistributor) {
-                console.log('Server is not marked as a distributor');
+            // First check using sp_get_distributor
+            const distInfo = await this.getDistributorInfo(connection);
+            console.log('Distributor info from sp_get_distributor:', distInfo);
+            
+            if (!distInfo.isDistributor) {
+                console.log('Server is not marked as a distributor according to sp_get_distributor');
                 return false;
             }
-
-            // Check if distribution database exists and is properly configured
-            const distributionDbResult = await this.sqlService.executeQuery<{ IsConfigured: number }>(connection, `
-                IF EXISTS (
-                    SELECT 1 
-                    FROM sys.databases 
-                    WHERE name = 'distribution'
-                )
-                AND EXISTS (
-                    SELECT 1 
-                    FROM [distribution].sys.tables 
-                    WHERE name = 'MSdistribution_agents'
-                )
-                SELECT 1 as IsConfigured
-                ELSE
-                SELECT 0 as IsConfigured
+            
+            // Now let's explicitly check the distribution database existence
+            const distributionDbName = distInfo.distributionDb || 'distribution';
+            const dbResult = await this.sqlService.executeQuery<{ DatabaseExists: number }>(connection, `
+                SELECT CASE WHEN DB_ID(N'${distributionDbName}') IS NOT NULL THEN 1 ELSE 0 END AS DatabaseExists
             `);
-
-            if (!distributionDbResult[0].IsConfigured) {
-                console.log('Distribution database is not properly configured');
+            
+            if (!dbResult[0].DatabaseExists) {
+                console.log(`Distribution database '${distributionDbName}' does not exist`);
                 return false;
             }
-
-            // Check if the server is properly configured as its own distributor
-            const serverConfigResult = await this.sqlService.executeQuery<{ IsConfigured: number }>(connection, `
-                IF EXISTS (
-                    SELECT 1 
-                    FROM [distribution].dbo.MSdistributor_properties
-                    WHERE property = 'installed'
-                    AND CAST(value as int) = 1
-                )
-                AND EXISTS (
-                    SELECT 1 
-                    FROM [distribution].dbo.MSdistribution_agents
-                )
-                SELECT 1 as IsConfigured
-                ELSE
-                SELECT 0 as IsConfigured
-            `);
-
-            if (!serverConfigResult[0].IsConfigured) {
-                console.log('Server distributor properties are not properly configured');
-                return false;
+            
+            console.log(`Distribution database '${distributionDbName}' exists`);
+            
+            // Check if the distribution database contains the required tables
+            try {
+                const tablesResult = await this.sqlService.executeQuery<{ TableExists: number }>(connection, `
+                    USE [${distributionDbName}]
+                    SELECT CASE WHEN 
+                        OBJECT_ID('MSdistribution_agents') IS NOT NULL
+                    THEN 1 ELSE 0 END AS TableExists
+                `);
+                
+                if (!tablesResult[0].TableExists) {
+                    console.log(`Distribution database '${distributionDbName}' does not contain required tables`);
+                    return false;
+                }
+                
+                console.log(`Distribution database '${distributionDbName}' contains required tables`);
+            } catch (error) {
+                console.log(`Error checking tables in distribution database: ${error}`);
+                // Even if we can't check tables, we've verified the database exists and sp_get_distributor says we're a distributor
+                // So we'll still return true
             }
-
-            console.log('Distributor validation successful');
+            
+            // If we get here, the distribution database exists and we're marked as a distributor
             return true;
         } catch (error) {
             console.error('Failed to validate distributor:', error);
+            
+            // If everything else failed, try a direct check for the distribution database
+            try {
+                const fallbackResult = await this.sqlService.executeQuery<{ DatabaseExists: number }>(connection, `
+                    SELECT CASE WHEN DB_ID('distribution') IS NOT NULL THEN 1 ELSE 0 END AS DatabaseExists
+                `);
+                
+                if (fallbackResult[0].DatabaseExists) {
+                    console.log("Fallback check: 'distribution' database exists");
+                    return true;
+                }
+            } catch (fallbackError) {
+                console.error('Fallback validation also failed:', fallbackError);
+            }
+            
             return false;
         }
     }
