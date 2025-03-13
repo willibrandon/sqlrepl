@@ -232,10 +232,37 @@ export class ReplicationService {
     public async getTables(connection: SqlServerConnection, database: string): Promise<string[]> {
         const result = await this.sqlService.executeQuery<{ TableName: string }>(connection, `
             USE [${database}]
-            SELECT TABLE_NAME as TableName
-            FROM INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_TYPE = 'BASE TABLE'
-            ORDER BY TABLE_NAME
+            SELECT t.name AS TableName
+            FROM sys.tables t
+            INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+            WHERE t.is_ms_shipped = 0
+              AND s.name = 'dbo'
+              AND t.name NOT LIKE 'sys%'
+              AND t.name NOT LIKE 'MS%'
+              AND t.name NOT IN (
+                'sysdiagrams',
+                'dtproperties',
+                'syscategories',
+                'syscolumns',
+                'syscomments',
+                'sysconstraints',
+                'sysdepends',
+                'sysfilegroups',
+                'sysfiles',
+                'sysfiles1',
+                'sysforeignkeys',
+                'sysfulltextcatalogs',
+                'sysindexes',
+                'sysindexkeys',
+                'sysmembers',
+                'sysobjects',
+                'syspermissions',
+                'sysprotects',
+                'sysreferences',
+                'systypes',
+                'sysusers'
+              )
+            ORDER BY t.name
         `);
         return result.map(r => r.TableName);
     }

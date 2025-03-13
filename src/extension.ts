@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionCommands } from './commands/connectionCommands';
 import { PublicationCommands } from './commands/publicationCommands';
+import { ServerCommands } from './commands/serverCommands';
 import { ReplicationExplorer } from './features/replicationExplorer';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -17,6 +18,10 @@ export function activate(context: vscode.ExtensionContext) {
     // Register connection commands
     const connectionCommands = new ConnectionCommands(context);
     connectionCommands.registerCommands();
+
+    // Register server commands
+    const serverCommands = new ServerCommands(context);
+    serverCommands.registerCommands();
 
     // Register publication commands
     const publicationCommands = new PublicationCommands(context);

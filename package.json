@@ -62,6 +62,12 @@
         "title": "Create Publication",
         "category": "SQL Replication",
         "icon": "$(add)"
+      },
+      {
+        "command": "sqlrepl.removeServer",
+        "title": "Remove Server",
+        "category": "SQL Replication",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -81,6 +87,11 @@
         {
           "command": "sqlrepl.createPublication",
           "when": "view == replicationTree && viewItem == publications",
+          "group": "inline@1"
+        },
+        {
+          "command": "sqlrepl.removeServer",
+          "when": "view == replicationTree && viewItem == server",
           "group": "inline@1"
         }
       ]
