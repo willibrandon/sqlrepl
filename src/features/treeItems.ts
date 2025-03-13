@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { SqlServerConnection } from '../services/connectionService';
+import { Publication } from '../services/replicationService';
 
-export type TreeItemType = 'server' | 'publications' | 'subscriptions' | 'agents';
+export type TreeItemType = 'server' | 'publications' | 'subscriptions' | 'agents' | 'publication';
 
 export class ServerTreeItem extends vscode.TreeItem {
     constructor(
@@ -40,5 +41,19 @@ export class FolderTreeItem extends vscode.TreeItem {
             default:
                 this.iconPath = new vscode.ThemeIcon('folder');
         }
+    }
+}
+
+export class PublicationTreeItem extends vscode.TreeItem {
+    constructor(
+        public readonly publication: Publication,
+        public readonly serverId: string,
+        public readonly collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None
+    ) {
+        super(publication.name, collapsibleState);
+        this.tooltip = publication.description || publication.name;
+        this.description = `${publication.database} | ${publication.type} (${publication.status})`;
+        this.contextValue = 'publication';
+        this.iconPath = new vscode.ThemeIcon('book');
     }
 } 

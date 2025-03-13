@@ -23,6 +23,21 @@ export interface DistributorInfo {
     };
 }
 
+export interface Publication {
+    name: string;
+    description: string;
+    type: ReplicationType;
+    status: string;
+    immediate_sync: boolean;
+    enabled_for_internet: boolean;
+    allow_push: boolean;
+    allow_pull: boolean;
+    allow_anonymous: boolean;
+    immediate_sync_ready: boolean;
+    allow_sync_tran: boolean;
+    database: string;
+}
+
 export class ReplicationService {
     private static instance: ReplicationService;
     private sqlService: SqlService;
@@ -223,5 +238,59 @@ export class ReplicationService {
             ORDER BY TABLE_NAME
         `);
         return result.map(r => r.TableName);
+    }
+
+    public async getPublications(connection: SqlServerConnection): Promise<Publication[]> {
+        try {
+            // First validate the distributor to ensure we can query publications
+            const isDistributorValid = await this.validateDistributor(connection);
+            if (!isDistributorValid) {
+                console.log('Server is not a valid distributor, cannot retrieve publications');
+                return [];
+            }
+
+            // Get all user databases
+            const databasesResult = await this.sqlService.executeQuery<{ name: string }>(connection, `
+                SELECT name FROM sys.databases 
+                WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb', 'distribution')
+                AND state = 0 -- Online databases only
+                ORDER BY name
+            `) || [];
+            
+            const databases = databasesResult.map(db => db.name);
+            console.log(`Found ${databases.length} user databases on ${connection.serverName}`);
+            
+            const allPublications: Publication[] = [];
+            
+            // Query publications from each database
+            for (const dbName of databases) {
+                try {
+                    console.log(`Checking publications in database: ${dbName}`);
+                    
+                    const dbPublications = await this.sqlService.executeQuery<Publication>(connection, `
+                        USE [${dbName}]
+                        EXEC sp_helppublication
+                    `) || [];
+                    
+                    // Add database name to each publication for reference
+                    const publicationsWithDb = dbPublications.map(pub => ({
+                        ...pub,
+                        database: dbName
+                    }));
+                    
+                    allPublications.push(...publicationsWithDb);
+                    console.log(`Found ${dbPublications.length} publications in database ${dbName}`);
+                } catch (error) {
+                    console.log(`Error checking publications in ${dbName}: ${error}`);
+                    // Continue with next database
+                }
+            }
+
+            console.log(`Retrieved ${allPublications.length} total publications from ${connection.serverName}`);
+            return allPublications;
+        } catch (error) {
+            console.error('Failed to get publications:', error);
+            return [];
+        }
     }
 } 
