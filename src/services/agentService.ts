@@ -118,7 +118,14 @@ export class AgentService {
                     console.error('Error getting distribution agents:', error);
                 }
     
-                // Skip snapshot agents for now as requested
+                // Try to get snapshot agents as well
+                try {
+                    const snapshotAgents = await this.getSnapshotAgents(connection);
+                    allAgentJobs = allAgentJobs.concat(snapshotAgents);
+                    console.log(`Found ${snapshotAgents.length} snapshot agents`);
+                } catch (error) {
+                    console.error('Error getting snapshot agents:', error);
+                }
                 
                 console.log(`Returning ${allAgentJobs.length} total agent jobs from secondary methods`);
                 return allAgentJobs;
