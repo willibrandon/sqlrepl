@@ -521,7 +521,7 @@ export class ReplicationService {
             const databases = databasesResult.map(db => db.name);
             console.log(`Found ${databases.length} user databases to check for subscriptions on ${connection.serverName}`);
             
-            let allSubscriptions: Subscription[] = [];
+            const allSubscriptions: Subscription[] = [];
             
             // First, check the distributor info
             const distInfo = await this.getDistributorInfo(connection);
