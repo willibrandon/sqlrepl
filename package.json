@@ -86,6 +86,24 @@
         "title": "Drop Subscription",
         "category": "SQL Replication",
         "icon": "$(trash)"
+      },
+      {
+        "command": "sqlrepl.startAgent",
+        "title": "Start Agent",
+        "category": "SQL Replication",
+        "icon": "$(play)"
+      },
+      {
+        "command": "sqlrepl.stopAgent",
+        "title": "Stop Agent",
+        "category": "SQL Replication",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "sqlrepl.viewAgentHistory",
+        "title": "View Agent History",
+        "category": "SQL Replication",
+        "icon": "$(history)"
       }
     ],
     "menus": {
@@ -130,6 +148,21 @@
         {
           "command": "sqlrepl.dropSubscription",
           "when": "view == replicationTree && viewItem == subscription",
+          "group": "inline@2"
+        },
+        {
+          "command": "sqlrepl.startAgent",
+          "when": "view == replicationTree && viewItem == agent-idle",
+          "group": "inline@1"
+        },
+        {
+          "command": "sqlrepl.stopAgent",
+          "when": "view == replicationTree && viewItem == agent-running",
+          "group": "inline@1"
+        },
+        {
+          "command": "sqlrepl.viewAgentHistory",
+          "when": "view == replicationTree && (viewItem == agent-idle || viewItem == agent-running)",
           "group": "inline@2"
         }
       ]

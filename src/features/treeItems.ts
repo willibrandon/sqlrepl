@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { SqlServerConnection } from '../services/connectionService';
 import { Publication, Subscription } from '../services/replicationService';
+import { AgentJob, AgentType } from '../services/agentService';
 
-export type TreeItemType = 'server' | 'publications' | 'subscriptions' | 'agents' | 'publication' | 'subscription';
+export type TreeItemType = 'server' | 'publications' | 'subscriptions' | 'agents' | 'publication' | 'subscription' | 'agent';
 
 export class ServerTreeItem extends vscode.TreeItem {
     constructor(
@@ -113,6 +114,66 @@ export class SubscriptionTreeItem extends vscode.TreeItem {
         if (subscription.subscription_type) {
             iconName = subscription.subscription_type.toLowerCase() === 'push' ? 'arrow-down' : 'arrow-up';
         }
+        this.iconPath = new vscode.ThemeIcon(iconName);
+    }
+}
+
+export class AgentTreeItem extends vscode.TreeItem {
+    constructor(
+        public readonly agent: AgentJob,
+        public readonly serverId: string,
+        public readonly collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None
+    ) {
+        super(agent.name, collapsibleState);
+        
+        // Determine agent-specific status
+        const statusIcon = agent.isRunning ? '$(sync~spin)' : agent.enabled ? '$(circle-large-outline)' : '$(circle-slash)';
+        const statusText = agent.isRunning ? 'Running' : agent.enabled ? 'Idle' : 'Disabled';
+        
+        // Create a detailed tooltip with all available information
+        this.tooltip = [
+            `Agent: ${agent.name}`,
+            `Type: ${agent.type}`,
+            `Status: ${statusText}`,
+            `Enabled: ${agent.enabled ? 'Yes' : 'No'}`,
+            `Last Run: ${agent.lastRunTime ? agent.lastRunTime.toLocaleString() : 'Never'}`,
+            `Last Outcome: ${agent.lastRunOutcome || 'Unknown'}`,
+            `Next Run: ${agent.nextRunTime ? agent.nextRunTime.toLocaleString() : 'Not Scheduled'}`,
+            `Publisher: ${agent.publisher || 'Unknown'}`,
+            `Publisher DB: ${agent.publisherDb || 'Unknown'}`,
+            `Publication: ${agent.publication || 'Unknown'}`,
+            agent.subscriber ? `Subscriber: ${agent.subscriber}` : '',
+            agent.subscriberDb ? `Subscriber DB: ${agent.subscriberDb}` : '',
+            `Description: ${agent.description}`
+        ].filter(Boolean).join('\n');
+        
+        // Create a concise description with status and last run info
+        const lastRun = agent.lastRunTime 
+            ? `Last: ${agent.lastRunTime.toLocaleString()} (${agent.lastRunOutcome})`
+            : 'Never Run';
+        
+        this.description = `${statusIcon} ${statusText} | ${lastRun}`;
+        this.contextValue = agent.isRunning ? 'agent-running' : 'agent-idle';
+        
+        // Choose icon based on agent type
+        let iconName: string;
+        switch (agent.type) {
+            case AgentType.SnapshotAgent:
+                iconName = 'file-binary';
+                break;
+            case AgentType.LogReaderAgent:
+                iconName = 'book';
+                break;
+            case AgentType.DistributionAgent:
+                iconName = 'package';
+                break;
+            case AgentType.MergeAgent:
+                iconName = 'git-merge';
+                break;
+            default:
+                iconName = 'pulse';
+        }
+        
         this.iconPath = new vscode.ThemeIcon(iconName);
     }
 } 
