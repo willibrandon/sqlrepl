@@ -37,6 +37,9 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
+    - name: Install xvfb
+      run: sudo apt-get install -y xvfb
+
     - name: Install SQL Server tools
       run: |
         curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
@@ -66,7 +69,7 @@ jobs:
         /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd' -C -d TestDB -Q "CREATE TABLE TestTable (Id INT); INSERT INTO TestTable VALUES (1), (2);"
 
     - name: Run tests
-      run: npm test
+      run: xvfb-run -a npm test
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
