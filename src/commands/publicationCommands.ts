@@ -43,6 +43,69 @@ export class PublicationCommands {
                 throw new Error('Server connection not found');
             }
 
+            // Check distributor configuration
+            const replicationService = ReplicationService.getInstance();
+            const distInfo = await replicationService.getDistributorInfo(connection);
+
+            if (!distInfo.isDistributor) {
+                const configureNow = await vscode.window.showQuickPick(
+                    [
+                        { label: 'Configure Distribution', description: 'Set up this server as its own distributor', value: true },
+                        { label: 'Cancel', description: 'Cancel publication creation', value: false }
+                    ],
+                    { 
+                        placeHolder: 'Distribution is not configured. Would you like to configure it now?',
+                        title: 'Configure Distribution'
+                    }
+                );
+
+                if (!configureNow || !configureNow.value) {
+                    return;
+                }
+
+                // Get distribution database name
+                const distributionDb = await vscode.window.showInputBox({
+                    prompt: 'Enter distribution database name',
+                    value: 'distribution',
+                    validateInput: text => {
+                        if (!text) return 'Distribution database name is required';
+                        if (!/^[a-zA-Z0-9_]+$/.test(text)) return 'Database name can only contain letters, numbers, and underscores';
+                        return null;
+                    }
+                });
+
+                if (!distributionDb) {
+                    return; // User cancelled
+                }
+
+                // Get snapshot folder
+                const snapshotFolder = await vscode.window.showInputBox({
+                    prompt: 'Enter snapshot folder path',
+                    value: '\\\\' + connection.serverName + '\\repldata',
+                    validateInput: text => {
+                        return text ? null : 'Snapshot folder path is required';
+                    }
+                });
+
+                if (!snapshotFolder) {
+                    return; // User cancelled
+                }
+
+                // Configure distribution
+                await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Notification,
+                        title: 'Configuring distribution...',
+                        cancellable: false
+                    },
+                    async () => {
+                        await replicationService.configureDistributor(connection, distributionDb, snapshotFolder);
+                    }
+                );
+
+                vscode.window.showInformationMessage('Distribution configured successfully');
+            }
+
             // Get publication type
             const typePick = await vscode.window.showQuickPick(
                 [

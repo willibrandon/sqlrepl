@@ -12,6 +12,17 @@ export interface PublicationOptions {
     articles: string[];
 }
 
+export interface DistributorInfo {
+    isDistributor: boolean;
+    isPublisher: boolean;
+    distributionDb: string | null;
+    workingDirectory: string | null;
+    remoteDist: {
+        isRemote: boolean;
+        serverName: string | null;
+    };
+}
+
 export class ReplicationService {
     private static instance: ReplicationService;
     private sqlService: SqlService;
@@ -25,6 +36,72 @@ export class ReplicationService {
             ReplicationService.instance = new ReplicationService();
         }
         return ReplicationService.instance;
+    }
+
+    public async getDistributorInfo(connection: SqlServerConnection): Promise<DistributorInfo> {
+        try {
+            // First check if server is configured as a distributor using sp_get_distributor
+            const distInfo = await this.sqlService.executeQuery<{
+                distribution_db: string | null;
+                directory: string | null;
+                account: string | null;
+                min_distretention: number;
+                max_distretention: number;
+                history_retention: number;
+                is_distributor: boolean;
+                is_publisher: boolean;
+                is_subscriber: boolean;
+                name: string | null;
+            }>(connection, 'EXEC sp_get_distributor');
+
+            const result = distInfo[0];
+            
+            return {
+                isDistributor: result.is_distributor,
+                isPublisher: result.is_publisher,
+                distributionDb: result.distribution_db,
+                workingDirectory: result.directory,
+                remoteDist: {
+                    isRemote: result.name !== null && result.name !== connection.serverName,
+                    serverName: result.name
+                }
+            };
+        } catch (error) {
+            console.error('Failed to get distributor info:', error);
+            throw error;
+        }
+    }
+
+    public async configureDistributor(
+        connection: SqlServerConnection, 
+        distributionDb: string = 'distribution',
+        workingDirectory?: string
+    ): Promise<void> {
+        try {
+            // Install distributor
+            await this.sqlService.executeProcedure(connection, 'sp_adddistributor', {
+                distributor: connection.serverName,
+                password: null  // Local distributor doesn't need password
+            });
+
+            // Create distribution database
+            await this.sqlService.executeProcedure(connection, 'sp_adddistributiondb', {
+                database: distributionDb,
+                security_mode: 1  // Windows Authentication
+            });
+
+            // Configure the server as its own publisher
+            const defaultWorkingDir = workingDirectory || `\\\\${connection.serverName}\\repldata`;
+            await this.sqlService.executeProcedure(connection, 'sp_adddistpublisher', {
+                publisher: connection.serverName,
+                distribution_db: distributionDb,
+                working_directory: defaultWorkingDir,
+                security_mode: 1  // Windows Authentication
+            });
+        } catch (error) {
+            console.error('Failed to configure distributor:', error);
+            throw error;
+        }
     }
 
     public async createPublication(connection: SqlServerConnection, options: PublicationOptions): Promise<void> {

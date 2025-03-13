@@ -69,19 +69,19 @@
         {
           "command": "sqlrepl.addConnection",
           "when": "view == replicationTree",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "sqlrepl.refreshTree",
           "when": "view == replicationTree",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
         {
           "command": "sqlrepl.createPublication",
           "when": "view == replicationTree && viewItem == publications",
-          "group": "inline"
+          "group": "inline@1"
         }
       ]
     }
@@ -99,12 +99,14 @@
     "@types/node": "^20.0.0",
     "@types/uuid": "^9.0.8",
     "@types/vscode": "^1.85.0",
+    "electron-rebuild": "^3.2.9",
     "typescript": "^5.3.3",
     "vsce": "^2.15.0",
     "vscode-test": "^1.6.1"
   },
   "dependencies": {
     "@azure/core-auth": "^1.9.0",
+    "msnodesqlv8": "^4.5.0",
     "mssql": "^10.0.2",
     "uuid": "^9.0.1"
   }

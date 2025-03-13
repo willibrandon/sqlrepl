@@ -1,4 +1,4 @@
-import * as sql from 'mssql';
+import * as sql from 'mssql/msnodesqlv8';
 import { SqlServerConnection } from './connectionService';
 
 export class SqlService {
@@ -17,53 +17,81 @@ export class SqlService {
     }
 
     private getConnectionConfig(connection: SqlServerConnection): sql.config {
-        const baseConfig: sql.config = {
-            server: connection.serverName,
-            database: connection.database || 'master',
-            options: {
-                trustServerCertificate: true, // For development only
-                encrypt: true
-            },
-            pool: {
-                max: 10,
-                min: 0,
-                idleTimeoutMillis: 30000
-            }
-        };
+        console.log('Attempting to connect with server:', connection.serverName);
 
+        // Build a connection string for ODBC Driver 17
+        let connectionString = `Driver={ODBC Driver 17 for SQL Server};Server=${connection.serverName};Database=${connection.database || 'master'};`;
+        
+        // Add authentication details
         if (connection.authentication === 'windows') {
-            return {
-                ...baseConfig,
-                options: {
-                    ...baseConfig.options,
-                    trustedConnection: true
-                }
-            };
+            connectionString += 'Trusted_Connection=yes;';
         } else {
-            return {
-                ...baseConfig,
-                user: connection.username,
-                password: connection.password
-            };
+            connectionString += `Uid=${connection.username};Pwd=${connection.password};`;
         }
+        
+        // Enable secure connections
+        connectionString += 'TrustServerCertificate=yes;';
+        
+        console.log('Connection string (masked):', 
+            connectionString.replace(/Pwd=[^;]*/, 'Pwd=***'));
+
+        // Create a properly typed config object
+        const config: sql.config = {
+            server: connection.serverName, // Required for the type
+            database: connection.database || 'master', // Required for the type
+            driver: 'msnodesqlv8',
+            options: {
+                trustedConnection: connection.authentication === 'windows',
+                trustServerCertificate: true
+            } as any // Use type assertion to allow the connectionString property
+        };
+        
+        // Add the connectionString as a custom property
+        (config as any).connectionString = connectionString;
+        
+        return config;
+    }
+
+    private getPoolKey(connection: SqlServerConnection): string {
+        return `${connection.serverName}_${connection.database || 'master'}_${connection.username || 'windows'}`;
     }
 
     private async getPool(connection: SqlServerConnection): Promise<sql.ConnectionPool> {
-        const key = `${connection.serverName}_${connection.database || 'master'}_${connection.username || 'windows'}`;
+        const key = this.getPoolKey(connection);
         
         if (!this.pools.has(key)) {
-            const pool = new sql.ConnectionPool(this.getConnectionConfig(connection));
-            await pool.connect();
-            this.pools.set(key, pool);
+            try {
+                const config = this.getConnectionConfig(connection);
+                console.log('Creating pool with config:', 
+                    JSON.stringify({
+                        ...config,
+                        connectionString: (config as any).connectionString?.replace(/Pwd=[^;]*/, 'Pwd=***')
+                    }, null, 2));
+                
+                // Force using the native msnodesqlv8 driver
+                const pool = new sql.ConnectionPool(config);
+                console.log('Connecting to pool...');
+                await pool.connect();
+                this.pools.set(key, pool);
+                console.log(`Connected successfully to ${connection.serverName}`);
+            } catch (error) {
+                console.error(`Failed to connect to ${connection.serverName}:`, error);
+                throw error;
+            }
         }
 
         return this.pools.get(key)!;
     }
 
     public async executeQuery<T>(connection: SqlServerConnection, query: string): Promise<T[]> {
-        const pool = await this.getPool(connection);
-        const result = await pool.request().query(query);
-        return result.recordset;
+        try {
+            const pool = await this.getPool(connection);
+            const result = await pool.request().query(query);
+            return result.recordset;
+        } catch (error) {
+            console.error(`Failed to execute query on ${connection.serverName}:`, error);
+            throw error;
+        }
     }
 
     public async executeProcedure<T>(
@@ -71,17 +99,22 @@ export class SqlService {
         procedure: string, 
         params?: { [key: string]: any }
     ): Promise<T[]> {
-        const pool = await this.getPool(connection);
-        const request = pool.request();
+        try {
+            const pool = await this.getPool(connection);
+            const request = pool.request();
 
-        if (params) {
-            Object.entries(params).forEach(([key, value]) => {
-                request.input(key, value);
-            });
+            if (params) {
+                Object.entries(params).forEach(([key, value]) => {
+                    request.input(key, value);
+                });
+            }
+
+            const result = await request.execute(procedure);
+            return result.recordset;
+        } catch (error) {
+            console.error(`Failed to execute procedure ${procedure} on ${connection.serverName}:`, error);
+            throw error;
         }
-
-        const result = await request.execute(procedure);
-        return result.recordset;
     }
 
     public async testConnection(connection: SqlServerConnection): Promise<boolean> {
@@ -90,7 +123,7 @@ export class SqlService {
             const result = await pool.request().query('SELECT @@VERSION as version');
             return result.recordset.length > 0;
         } catch (error) {
-            console.error('Connection test failed:', error);
+            console.error(`Connection test failed for ${connection.serverName}:`, error);
             return false;
         }
     }
@@ -101,4 +134,4 @@ export class SqlService {
         }
         this.pools.clear();
     }
-} 
+}
