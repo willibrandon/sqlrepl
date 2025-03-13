@@ -118,33 +118,12 @@ export class ReplicationService {
                 @value = N'true'
         `);
 
-        // Create the publication
+        // Create the publication - keep it simple with minimal parameters
         await this.sqlService.executeProcedure(connection, 'sp_addpublication', {
             publication: options.name,
             description: options.description || '',
             sync_method: options.type === 'snapshot' ? 'native' : 'concurrent',
-            retention: 0,
-            allow_push: true,
-            allow_pull: true,
-            allow_anonymous: false,
-            enabled_for_internet: false,
-            snapshot_in_defaultfolder: false,
-            compress_snapshot: false,
-            ftp_port: 21,
-            allow_subscription_copy: false,
-            add_to_active_directory: false,
-            repl_freq: 'continuous',
-            status: 'active',
-            independent_agent: true,
-            immediate_sync: true,
-            allow_sync_tran: false,
-            autogen_sync_procs: false,
-            allow_queued_tran: false,
-            allow_dts: false,
-            replicate_ddl: 1,
-            allow_initialize_from_backup: false,
-            enabled_for_p2p: false,
-            enabled_for_het_sub: false
+            status: 'active'
         });
 
         // Set the working directory for snapshot files
@@ -154,25 +133,15 @@ export class ReplicationService {
             value: options.snapshotFolder
         });
 
-        // Add articles
+        // Add articles - simplified parameters
         for (const article of options.articles) {
             await this.sqlService.executeProcedure(connection, 'sp_addarticle', {
                 publication: options.name,
                 article: article,
                 source_owner: 'dbo',
                 source_object: article,
-                type: 'logbased',
-                description: null,
-                creation_script: null,
-                pre_creation_cmd: 'drop',
-                schema_option: 0x000000000803509F,
-                identityrangemanagementoption: 'manual',
                 destination_table: article,
-                destination_owner: 'dbo',
-                vertical_partition: false,
-                ins_cmd: `CALL sp_MSins_${article}`,
-                del_cmd: `CALL sp_MSdel_${article}`,
-                upd_cmd: `SCALL sp_MSupd_${article}`
+                destination_owner: 'dbo'
             });
         }
     }
