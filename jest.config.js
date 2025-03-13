@@ -2,9 +2,14 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
-  testMatch: ['**/__tests__/**/*.test.ts'],
+  testMatch: [
+    '**/src/__tests__/**/*.test.ts',
+    '!**/src/__tests__/extension/**'
+  ],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
+    '^.+\\.tsx?$': ['ts-jest', {
+      tsconfig: 'tsconfig.json'
+    }]
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   collectCoverage: true,
@@ -20,4 +25,5 @@ module.exports = {
       tsconfig: 'tsconfig.json',
     },
   },
+  reporters: ['default']
 }; 

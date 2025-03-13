@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Function to display usage
+# Show usage information
 show_usage() {
-    echo "Usage: $0 [options]"
+    echo "Usage: $0 [OPTIONS]"
     echo "Options:"
-    echo "  -t, --test       Run tests after build"
-    echo "  -d, --docker     Start Docker containers for tests"
-    echo "  -h, --help       Show this help message"
+    echo "  -t, --test     Run tests after build"
+    echo "  -d, --docker   Start Docker containers for tests"
+    echo "  -h, --help     Show this help message"
 }
 
 # Default values
@@ -36,7 +36,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Print build info
 echo "🔄 Starting build process..."
 echo "Tests enabled: $RUN_TESTS"
 echo "Docker enabled: $USE_DOCKER"
@@ -58,46 +57,37 @@ if [ ! -d "node_modules" ]; then
     echo "   Dependencies installed successfully"
 fi
 
-# Run TypeScript compiler
+# Build TypeScript
 echo "🔨 Building TypeScript..."
-if ! npm run compile; then
+npm run compile
+BUILD_EXIT_CODE=$?
+
+if [ $BUILD_EXIT_CODE -ne 0 ]; then
     echo "❌ Build failed!"
-    exit 1
+    exit $BUILD_EXIT_CODE
 fi
 
 echo "✅ Build completed successfully!"
 
-# Run tests if requested
+# Run tests if enabled
 if [ "$RUN_TESTS" = true ]; then
-    if [ "$USE_DOCKER" = true ]; then
-        echo "🐳 Starting Docker containers..."
-        if ! docker-compose up -d; then
-            echo "❌ Failed to start Docker containers!"
-            exit 1
-        fi
-
-        echo "⏳ Waiting for SQL Server to be ready..."
-        echo "   (This will take about 30 seconds)"
-        sleep 30
-
-        echo "🧪 Running tests..."
-        if ! npm test; then
-            echo "❌ Tests failed!"
-            echo "🧹 Cleaning up Docker containers..."
-            docker-compose down
-            exit 1
-        fi
-
-        echo "🧹 Cleaning up Docker containers..."
-        docker-compose down
-    else
-        echo "🧪 Running tests..."
-        if ! npm test; then
-            echo "❌ Tests failed!"
-            exit 1
-        fi
+    echo "🧪 Running tests..."
+    
+    # Run integration tests first
+    npm run test:integration
+    INTEGRATION_TEST_EXIT_CODE=$?
+    
+    # Run extension tests
+    npm run test:extension
+    EXTENSION_TEST_EXIT_CODE=$?
+    
+    # Check if any tests failed
+    if [ $INTEGRATION_TEST_EXIT_CODE -ne 0 ] || [ $EXTENSION_TEST_EXIT_CODE -ne 0 ]; then
+        echo "❌ Tests failed!"
+        exit 1
     fi
-    echo "✅ Tests completed successfully!"
+    
+    echo "✅ All tests passed!"
 fi
 
-echo "✨ All done! Build completed successfully!" 
+exit 0 

@@ -41,4 +41,13 @@ yarn-error.log*
 *.suo
 *.ntvs*
 *.njsproj
-*.sln 
+*.sln
+
+# New additions from the code block
+.vscode-test
+*.vsix
+.env
+.env.*.local
+*.log
+junit.xml
+test-results.xml 
