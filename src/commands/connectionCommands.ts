@@ -82,6 +82,7 @@ export class ConnectionCommands {
                 serverName,
                 authentication: authType.value as 'windows' | 'sql',
                 username,
+                password,
                 database
             };
 

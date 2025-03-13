@@ -117,16 +117,27 @@ sp_configure 'replication xps', 1;
 RECONFIGURE;
 GO
 
--- Create test login
-CREATE LOGIN $TEST_USER WITH PASSWORD = '$TEST_PASSWORD';
-GO
-
--- Create user in TestDB
+-- Drop existing login and user if they exist
 USE TestDB;
 GO
-CREATE USER $TEST_USER FOR LOGIN $TEST_USER;
+IF EXISTS (SELECT * FROM sys.database_principals WHERE name = '${TEST_USER}')
+    DROP USER ${TEST_USER};
 GO
-ALTER ROLE db_owner ADD MEMBER $TEST_USER;
+IF EXISTS (SELECT * FROM sys.server_principals WHERE name = '${TEST_USER}')
+    DROP LOGIN ${TEST_USER};
+GO
+
+-- Create login with explicit password policy settings
+CREATE LOGIN ${TEST_USER} WITH 
+    PASSWORD = '${TEST_PASSWORD}',
+    CHECK_POLICY = OFF,
+    CHECK_EXPIRATION = OFF;
+GO
+
+-- Create user and assign permissions
+CREATE USER ${TEST_USER} FOR LOGIN ${TEST_USER};
+GO
+ALTER ROLE db_owner ADD MEMBER ${TEST_USER};
 GO
 
 -- Create test table

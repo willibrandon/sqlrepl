@@ -1,4 +1,4 @@
-import * as sql from 'mssql/msnodesqlv8';
+import * as sql from 'mssql';
 import { SqlServerConnection } from './connectionService';
 
 export class SqlService {
@@ -19,36 +19,41 @@ export class SqlService {
     private getConnectionConfig(connection: SqlServerConnection): sql.config {
         console.log('Attempting to connect with server:', connection.serverName);
 
-        // Build a connection string for ODBC Driver 17
-        let connectionString = `Driver={ODBC Driver 17 for SQL Server};Server=${connection.serverName};Database=${connection.database || 'master'};`;
-        
+        // Split server name and port if provided in format server,port
+        const [server, port] = connection.serverName.split(',');
+
+        // Create a cross-platform compatible config
+        const config: sql.config = {
+            server: server,
+            port: port ? parseInt(port, 10) : undefined,  // Ensure base 10 parsing
+            database: connection.database || 'master',
+            options: {
+                trustServerCertificate: true, // For development/testing
+                encrypt: true, // For security
+                port: port ? parseInt(port, 10) : undefined,  // Also set port in options
+                enableArithAbort: true // Add this for better compatibility
+            }
+        };
+
         // Add authentication details
         if (connection.authentication === 'windows') {
-            connectionString += 'Trusted_Connection=yes;';
+            config.options = {
+                ...config.options,
+                trustedConnection: true,
+                enableArithAbort: true
+            };
         } else {
-            connectionString += `Uid=${connection.username};Pwd=${connection.password};`;
+            config.user = connection.username;
+            config.password = connection.password;
         }
-        
-        // Enable secure connections
-        connectionString += 'TrustServerCertificate=yes;';
-        
-        console.log('Connection string (masked):', 
-            connectionString.replace(/Pwd=[^;]*/, 'Pwd=***'));
 
-        // Create a properly typed config object
-        const config: sql.config = {
-            server: connection.serverName, // Required for the type
-            database: connection.database || 'master', // Required for the type
-            driver: 'msnodesqlv8',
-            options: {
-                trustedConnection: connection.authentication === 'windows',
-                trustServerCertificate: true
-            } as any // Use type assertion to allow the connectionString property
+        // Log the config (with masked password)
+        const maskedConfig = {
+            ...config,
+            password: '***'
         };
-        
-        // Add the connectionString as a custom property
-        (config as any).connectionString = connectionString;
-        
+        console.log('Connection config (masked):', JSON.stringify(maskedConfig, null, 2));
+
         return config;
     }
 
@@ -62,13 +67,8 @@ export class SqlService {
         if (!this.pools.has(key)) {
             try {
                 const config = this.getConnectionConfig(connection);
-                console.log('Creating pool with config:', 
-                    JSON.stringify({
-                        ...config,
-                        connectionString: (config as any).connectionString?.replace(/Pwd=[^;]*/, 'Pwd=***')
-                    }, null, 2));
+                console.log('Creating pool...');
                 
-                // Force using the native msnodesqlv8 driver
                 const pool = new sql.ConnectionPool(config);
                 console.log('Connecting to pool...');
                 await pool.connect();
