@@ -10,27 +10,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      sqlserver:
-        image: mcr.microsoft.com/mssql/server:2022-latest
-        env:
-          ACCEPT_EULA: Y
-          SA_PASSWORD: YourStrong@Passw0rd
-          MSSQL_PID: Developer
-          MSSQL_MEMORY_LIMIT_MB: 4096
-          MSSQL_AGENT_ENABLED: false
-        ports:
-          - 1433:1433
-        options: >-
-          --health-cmd "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd' -Q 'SELECT 1' || exit 1"
-          --health-interval 30s
-          --health-timeout 20s
-          --health-retries 10
-          --health-start-period 60s
-          --memory 4096m
-          --memory-swap 4096m
-          --shm-size 2gb
-
     steps:
     - uses: actions/checkout@v4
     
@@ -40,25 +19,53 @@ jobs:
         node-version: '20'
         cache: 'npm'
 
+    - name: Start SQL Server
+      run: |
+        docker run -e "ACCEPT_EULA=Y" \
+                  -e "SA_PASSWORD=YourStrong@Passw0rd" \
+                  -e "MSSQL_PID=Developer" \
+                  -p 1433:1433 \
+                  --name sql1 \
+                  -d mcr.microsoft.com/mssql/server:2022-latest
+
+        echo "Waiting for SQL Server to start..."
+        for i in {1..60}; do
+          # Check if container is still running
+          if ! docker ps | grep sql1 > /dev/null; then
+            echo "SQL Server container stopped unexpectedly"
+            docker logs sql1
+            exit 1
+          fi
+          
+          # Try to connect
+          if docker exec sql1 /opt/mssql-tools/bin/sqlcmd \
+             -S localhost -U sa -P "YourStrong@Passw0rd" \
+             -Q "SELECT @@VERSION" > /dev/null 2>&1; then
+            echo "SQL Server is ready"
+            break
+          fi
+          
+          echo "Attempt $i: SQL Server not ready yet..."
+          if [ $i -eq 60 ]; then
+            echo "Timed out waiting for SQL Server"
+            docker logs sql1
+            exit 1
+          fi
+          sleep 5
+        done
+
     - name: Install dependencies
       run: npm ci
 
-    - name: Wait for SQL Server
-      run: |
-        echo "Waiting for SQL Server to be ready..."
-        for i in {1..30}; do
-          if sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd' -Q "SELECT @@VERSION" &> /dev/null; then
-            echo "SQL Server is ready!"
-            break
-          fi
-          echo "Attempt $i: SQL Server not ready yet..."
-          sleep 10
-        done
-
     - name: Setup test database
       run: |
-        sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd' -Q "IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'TestDB') CREATE DATABASE TestDB;"
-        sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd' -d TestDB -Q "IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'TestTable') CREATE TABLE TestTable (Id INT); IF NOT EXISTS (SELECT * FROM TestTable) INSERT INTO TestTable VALUES (1), (2);"
+        docker exec sql1 /opt/mssql-tools/bin/sqlcmd \
+          -S localhost -U sa -P "YourStrong@Passw0rd" \
+          -Q "CREATE DATABASE TestDB;"
+        
+        docker exec sql1 /opt/mssql-tools/bin/sqlcmd \
+          -S localhost -U sa -P "YourStrong@Passw0rd" -d TestDB \
+          -Q "CREATE TABLE TestTable (Id INT); INSERT INTO TestTable VALUES (1), (2);"
 
     - name: Run tests
       run: npm test
@@ -68,4 +75,8 @@ jobs:
       if: always()
       with:
         name: test-results
-        path: junit.xml 
+        path: junit.xml
+
+    - name: Cleanup
+      if: always()
+      run: docker rm -f sql1 
