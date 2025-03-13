@@ -91,10 +91,45 @@ docker-compose up -d
 
 ### Building
 
-To build the extension:
+The project includes build scripts for both Unix-like systems and Windows. These scripts handle TypeScript compilation and optionally run tests.
+
+#### Unix/macOS (build.sh)
+
 ```bash
-npm run compile
+# Just build
+./scripts/build.sh
+
+# Build and run tests
+./scripts/build.sh --test
+
+# Build and run tests with Docker
+./scripts/build.sh --test --docker
+
+# Show help
+./scripts/build.sh --help
 ```
+
+#### Windows (build.ps1)
+
+```powershell
+# Just build
+.\scripts\build.ps1
+
+# Build and run tests
+.\scripts\build.ps1 -RunTests
+
+# Build and run tests with Docker
+.\scripts\build.ps1 -RunTests -UseDocker
+
+# Show help
+.\scripts\build.ps1 -Help
+```
+
+The build process:
+1. Cleans the previous build
+2. Installs dependencies if needed
+3. Compiles TypeScript to JavaScript
+4. Optionally runs tests (with or without Docker)
 
 ## Contributing
 
