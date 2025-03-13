@@ -3,6 +3,14 @@ import { ConnectionService } from '../services/connectionService';
 import { AgentService } from '../services/agentService';
 import { AgentTreeItem } from '../features/treeItems';
 
+interface JobHistoryEntry {
+    runDate: Date;
+    stepName: string;
+    status: 'Succeeded' | 'Failed' | 'In Progress' | string;
+    runDuration: string;
+    message: string;
+}
+
 export class AgentCommands {
     constructor(private context: vscode.ExtensionContext) {}
 
@@ -133,7 +141,7 @@ export class AgentCommands {
         }
     }
 
-    private getHistoryWebviewContent(agentName: string, agentType: string, history: any[]): string {
+    private getHistoryWebviewContent(agentName: string, agentType: string, history: JobHistoryEntry[]): string {
         // Format the history entries as a table
         const tableRows = history.map(entry => {
             // Determine status color
