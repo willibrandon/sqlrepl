@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { ConnectionService } from '../services/connectionService';
 import { ReplicationService } from '../services/replicationService';
-import { ServerTreeItem, FolderTreeItem, PublicationTreeItem } from './treeItems';
+import { ServerTreeItem, FolderTreeItem, PublicationTreeItem, SubscriptionTreeItem } from './treeItems';
 
-export class ReplicationExplorer implements vscode.TreeDataProvider<ServerTreeItem | FolderTreeItem | PublicationTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<ServerTreeItem | FolderTreeItem | PublicationTreeItem | undefined | null | void> = new vscode.EventEmitter<ServerTreeItem | FolderTreeItem | PublicationTreeItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<ServerTreeItem | FolderTreeItem | PublicationTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+export class ReplicationExplorer implements vscode.TreeDataProvider<ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem | undefined | null | void> = new vscode.EventEmitter<ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
     constructor(private context: vscode.ExtensionContext) {}
 
@@ -13,11 +13,11 @@ export class ReplicationExplorer implements vscode.TreeDataProvider<ServerTreeIt
         this._onDidChangeTreeData.fire();
     }
 
-    getTreeItem(element: ServerTreeItem | FolderTreeItem | PublicationTreeItem): vscode.TreeItem {
+    getTreeItem(element: ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem): vscode.TreeItem {
         return element;
     }
 
-    async getChildren(element?: ServerTreeItem | FolderTreeItem | PublicationTreeItem): Promise<(ServerTreeItem | FolderTreeItem | PublicationTreeItem)[]> {
+    async getChildren(element?: ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem): Promise<(ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem)[]> {
         if (!element) {
             // Root level - show servers
             const connections = ConnectionService.getInstance(this.context).getConnections();
@@ -49,6 +49,15 @@ export class ReplicationExplorer implements vscode.TreeDataProvider<ServerTreeIt
                     console.error('Failed to get publications for tree view:', error);
                     return [];
                 }
+            } else if (element.type === 'subscriptions') {
+                // Show subscriptions for this server
+                try {
+                    const subscriptions = await ReplicationService.getInstance().getSubscriptions(connection);
+                    return subscriptions.map(sub => new SubscriptionTreeItem(sub, element.serverId));
+                } catch (error) {
+                    console.error('Failed to get subscriptions for tree view:', error);
+                    return [];
+                }
             }
 
             // For other folder types, return empty array for now
@@ -58,7 +67,7 @@ export class ReplicationExplorer implements vscode.TreeDataProvider<ServerTreeIt
         return [];
     }
 
-    getParent(element: ServerTreeItem | FolderTreeItem | PublicationTreeItem): vscode.ProviderResult<ServerTreeItem | FolderTreeItem> {
+    getParent(element: ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem): vscode.ProviderResult<ServerTreeItem | FolderTreeItem> {
         if (element instanceof FolderTreeItem) {
             const connection = ConnectionService.getInstance(this.context).getConnection(element.serverId);
             if (connection) {
@@ -70,6 +79,13 @@ export class ReplicationExplorer implements vscode.TreeDataProvider<ServerTreeIt
             const connection = ConnectionService.getInstance(this.context).getConnection(element.serverId);
             if (connection) {
                 return new FolderTreeItem('Publications', 'publications', element.serverId, vscode.TreeItemCollapsibleState.Collapsed);
+            }
+        }
+
+        if (element instanceof SubscriptionTreeItem) {
+            const connection = ConnectionService.getInstance(this.context).getConnection(element.serverId);
+            if (connection) {
+                return new FolderTreeItem('Subscriptions', 'subscriptions', element.serverId, vscode.TreeItemCollapsibleState.Collapsed);
             }
         }
 

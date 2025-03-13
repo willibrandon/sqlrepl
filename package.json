@@ -68,6 +68,24 @@
         "title": "Remove Server",
         "category": "SQL Replication",
         "icon": "$(trash)"
+      },
+      {
+        "command": "sqlrepl.createSubscription",
+        "title": "Create Subscription",
+        "category": "SQL Replication",
+        "icon": "$(add)"
+      },
+      {
+        "command": "sqlrepl.reinitializeSubscription",
+        "title": "Reinitialize Subscription",
+        "category": "SQL Replication",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "sqlrepl.dropSubscription",
+        "title": "Drop Subscription",
+        "category": "SQL Replication",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -93,6 +111,26 @@
           "command": "sqlrepl.removeServer",
           "when": "view == replicationTree && viewItem == server",
           "group": "inline@1"
+        },
+        {
+          "command": "sqlrepl.createSubscription",
+          "when": "view == replicationTree && viewItem == publication",
+          "group": "inline@1"
+        },
+        {
+          "command": "sqlrepl.createSubscription",
+          "when": "view == replicationTree && viewItem == subscriptions",
+          "group": "inline@1"
+        },
+        {
+          "command": "sqlrepl.reinitializeSubscription",
+          "when": "view == replicationTree && viewItem == subscription",
+          "group": "inline@1"
+        },
+        {
+          "command": "sqlrepl.dropSubscription",
+          "when": "view == replicationTree && viewItem == subscription",
+          "group": "inline@2"
         }
       ]
     }

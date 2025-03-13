@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { SqlServerConnection } from '../services/connectionService';
-import { Publication } from '../services/replicationService';
+import { Publication, Subscription } from '../services/replicationService';
 
-export type TreeItemType = 'server' | 'publications' | 'subscriptions' | 'agents' | 'publication';
+export type TreeItemType = 'server' | 'publications' | 'subscriptions' | 'agents' | 'publication' | 'subscription';
 
 export class ServerTreeItem extends vscode.TreeItem {
     constructor(
@@ -55,5 +55,44 @@ export class PublicationTreeItem extends vscode.TreeItem {
         this.description = `${publication.database} | ${publication.type} (${publication.status})`;
         this.contextValue = 'publication';
         this.iconPath = new vscode.ThemeIcon('book');
+    }
+}
+
+export class SubscriptionTreeItem extends vscode.TreeItem {
+    constructor(
+        public readonly subscription: Subscription,
+        public readonly serverId: string,
+        public readonly collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None
+    ) {
+        // Create a more descriptive name if the subscription name is not available
+        const displayName = subscription.name || `${subscription.publication}_${subscription.subscriberDb}`;
+        super(displayName, collapsibleState);
+
+        // Create a detailed tooltip with all available information
+        this.tooltip = [
+            `Publication: ${subscription.publication}`,
+            `Publisher: ${subscription.publisher || 'Unknown'}`,
+            `Publisher DB: ${subscription.publisherDb || 'Unknown'}`,
+            `Subscriber DB: ${subscription.subscriberDb || 'Unknown'}`,
+            `Type: ${subscription.subscription_type || 'Unknown'}`,
+            `Sync Type: ${subscription.sync_type || 'Unknown'}`,
+            `Status: ${subscription.status || 'Unknown'}`
+        ].join('\n');
+
+        // Create a concise but informative description
+        const publisher = subscription.publisher || 'Unknown';
+        const publisherDb = subscription.publisherDb || 'Unknown';
+        const subscriberDb = subscription.subscriberDb || 'Unknown';
+        const type = subscription.subscription_type || 'Unknown';
+        this.description = `${publisher}/${publisherDb} → ${subscriberDb} (${type})`;
+        
+        this.contextValue = 'subscription';
+        
+        // Choose icon based on subscription type, default to 'arrow-right' if type is unknown
+        let iconName = 'arrow-right';
+        if (subscription.subscription_type) {
+            iconName = subscription.subscription_type.toLowerCase() === 'push' ? 'arrow-down' : 'arrow-up';
+        }
+        this.iconPath = new vscode.ThemeIcon(iconName);
     }
 } 

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ConnectionCommands } from './commands/connectionCommands';
 import { PublicationCommands } from './commands/publicationCommands';
 import { ServerCommands } from './commands/serverCommands';
+import { SubscriptionCommands } from './commands/subscriptionCommands';
 import { ReplicationExplorer } from './features/replicationExplorer';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -26,6 +27,10 @@ export function activate(context: vscode.ExtensionContext) {
     // Register publication commands
     const publicationCommands = new PublicationCommands(context);
     publicationCommands.registerCommands();
+
+    // Register subscription commands
+    const subscriptionCommands = new SubscriptionCommands(context);
+    subscriptionCommands.registerCommands();
 
     // Register refresh command
     const refreshCommand = vscode.commands.registerCommand('sqlrepl.refreshTree', () => {
