@@ -51,10 +51,30 @@ export class PublicationTreeItem extends vscode.TreeItem {
         public readonly collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None
     ) {
         super(publication.name, collapsibleState);
-        this.tooltip = publication.description || publication.name;
+        
+        // Create a detailed tooltip with all available information
+        this.tooltip = [
+            `Publication: ${publication.name}`,
+            `Database: ${publication.database}`,
+            `Type: ${publication.type}`,
+            `Status: ${publication.status}`,
+            `Description: ${publication.description || 'None'}`,
+            `Immediate Sync: ${publication.immediate_sync ? 'Yes' : 'No'}`,
+            `Allow Push: ${publication.allow_push ? 'Yes' : 'No'}`,
+            `Allow Pull: ${publication.allow_pull ? 'Yes' : 'No'}`,
+            `Allow Anonymous: ${publication.allow_anonymous ? 'Yes' : 'No'}`,
+            `Immediate Sync Ready: ${publication.immediate_sync_ready ? 'Yes' : 'No'}`,
+            `Allow Sync Tran: ${publication.allow_sync_tran ? 'Yes' : 'No'}`,
+            `Enabled For Internet: ${publication.enabled_for_internet ? 'Yes' : 'No'}`
+        ].join('\n');
+        
+        // Create a concise but informative description
         this.description = `${publication.database} | ${publication.type} (${publication.status})`;
         this.contextValue = 'publication';
-        this.iconPath = new vscode.ThemeIcon('book');
+        
+        // Choose icon based on publication type
+        const iconName = publication.type.toLowerCase() === 'transactional' ? 'database' : 'file-binary';
+        this.iconPath = new vscode.ThemeIcon(iconName);
     }
 }
 

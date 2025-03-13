@@ -326,10 +326,31 @@ export class ReplicationService {
                     `) || [];
                     
                     // Add database name to each publication for reference
-                    const publicationsWithDb = dbPublications.map(pub => ({
-                        ...pub,
-                        database: dbName
-                    }));
+                    const publicationsWithDb = dbPublications.map(pub => {
+                        // Determine type based on 'replication frequency' (with spaces in SQL column name)
+                        // 0 = Transactional, 1 = Snapshot
+                        let type: ReplicationType;
+                        
+                        // Use type assertion to access the property with spaces
+                        const pubAny = pub as any;
+                        
+                        // IMPORTANT: The SQL column name is 'replication frequency' with a space
+                        //            replication frequency=0 means Transactional
+                        //            replication frequency=1 means Snapshot
+                        if (pubAny['replication frequency'] === 0) {
+                            type = 'transactional';
+                            console.log(`Publication ${pub.name} is TRANSACTIONAL (replication frequency=0)`);
+                        } else {
+                            type = 'snapshot';
+                            console.log(`Publication ${pub.name} is SNAPSHOT (replication frequency=${pubAny['replication frequency']})`);
+                        }
+                        
+                        return {
+                            ...pub,
+                            database: dbName,
+                            type: type
+                        };
+                    });
                     
                     allPublications.push(...publicationsWithDb);
                     console.log(`Found ${dbPublications.length} publications in database ${dbName}`);
