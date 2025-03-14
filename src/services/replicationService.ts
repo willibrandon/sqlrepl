@@ -403,7 +403,7 @@ export class ReplicationService {
             `) || [];
             
             const databases = databasesResult.map(db => db.name);
-            console.log(`Found ${databases.length} user databases on ${connection.serverName}`);
+            console.log(`Found ${databases.length} user databases on ${actualServerName}`);
             
             const allPublications: Publication[] = [];
             
@@ -460,7 +460,7 @@ export class ReplicationService {
                 }
             }
 
-            console.log(`Retrieved ${allPublications.length} total publications from ${connection.serverName}`);
+            console.log(`Retrieved ${allPublications.length} total publications from ${actualServerName}`);
             return allPublications;
         } catch (error) {
             console.error('Failed to get publications:', error);

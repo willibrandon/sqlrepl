@@ -1,3 +1,9 @@
+param(
+    [switch]$RunTests,
+    [switch]$UseDocker,
+    [switch]$Help
+)
+
 # Function to display usage
 function Show-Usage {
     Write-Host "Usage: .\build.ps1 [options]"
@@ -6,12 +12,6 @@ function Show-Usage {
     Write-Host "  -UseDocker    Start Docker containers for tests"
     Write-Host "  -Help         Show this help message"
 }
-
-param(
-    [switch]$RunTests,
-    [switch]$UseDocker,
-    [switch]$Help
-)
 
 if ($Help) {
     Show-Usage
