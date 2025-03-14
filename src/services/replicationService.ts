@@ -169,28 +169,41 @@ export class ReplicationService {
     public async configureDistributor(
         connection: SqlServerConnection, 
         distributionDb: string = 'distribution',
-        workingDirectory?: string
+        workingDirectory?: string,
+        distributorPassword: string = 'Password123!'  // Default password for testing
     ): Promise<void> {
         try {
+            // Switch to master database first
+            await this.sqlService.executeQuery(connection, 'USE [master]');
+
             // Install distributor
             await this.sqlService.executeProcedure(connection, 'sp_adddistributor', {
-                distributor: connection.serverName,
-                password: null  // Local distributor doesn't need password
+                'distributor': connection.serverName,  // Removed @ prefix
+                'password': distributorPassword       // Removed @ prefix
             });
 
             // Create distribution database
             await this.sqlService.executeProcedure(connection, 'sp_adddistributiondb', {
-                database: distributionDb,
-                security_mode: 1  // Windows Authentication
+                'database': distributionDb,          // Removed @ prefix
+                'data_folder': null,                // Removed @ prefix
+                'data_file': null,                  // Removed @ prefix
+                'log_folder': null,                 // Removed @ prefix
+                'log_file': null,                   // Removed @ prefix
+                'security_mode': 1,                 // Removed @ prefix
+                'login': null,                      // Removed @ prefix
+                'password': null                    // Removed @ prefix
             });
 
             // Configure the server as its own publisher
             const defaultWorkingDir = workingDirectory || `\\\\${connection.serverName}\\repldata`;
             await this.sqlService.executeProcedure(connection, 'sp_adddistpublisher', {
-                publisher: connection.serverName,
-                distribution_db: distributionDb,
-                working_directory: defaultWorkingDir,
-                security_mode: 1  // Windows Authentication
+                'publisher': connection.serverName,         // Removed @ prefix
+                'distribution_db': distributionDb,         // Removed @ prefix
+                'working_directory': defaultWorkingDir,    // Removed @ prefix
+                'security_mode': 1,                       // Removed @ prefix
+                'trusted': 'true',                        // Removed @ prefix
+                'login': null,                           // Removed @ prefix
+                'password': null                         // Removed @ prefix
             });
         } catch (error) {
             console.error('Failed to configure distributor:', error);
