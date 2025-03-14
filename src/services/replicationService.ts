@@ -166,6 +166,26 @@ export class ReplicationService {
         }
     }
 
+    private async resolveServerName(connection: SqlServerConnection): Promise<string> {
+        try {
+            // Query the actual server name from SQL Server
+            const result = await this.sqlService.executeQuery<{ ServerName: string }>(
+                connection,
+                "SELECT SERVERPROPERTY('ServerName') AS ServerName"
+            );
+            
+            if (result && result.length > 0 && result[0].ServerName) {
+                console.log(`Resolved server name: ${result[0].ServerName}`);
+                return result[0].ServerName;
+            }
+            
+            throw new Error('Could not resolve server name');
+        } catch (error) {
+            console.error('Failed to resolve server name:', error);
+            throw error;
+        }
+    }
+
     public async configureDistributor(
         connection: SqlServerConnection, 
         distributionDb: string = 'distribution',
@@ -173,37 +193,37 @@ export class ReplicationService {
         distributorPassword: string = 'Password123!'  // Default password for testing
     ): Promise<void> {
         try {
+            // First resolve the actual server name
+            const actualServerName = await this.resolveServerName(connection);
+            
             // Switch to master database first
             await this.sqlService.executeQuery(connection, 'USE [master]');
 
-            // Install distributor
+            // Install distributor using the resolved server name
             await this.sqlService.executeProcedure(connection, 'sp_adddistributor', {
-                'distributor': connection.serverName,  // Removed @ prefix
-                'password': distributorPassword       // Removed @ prefix
+                'distributor': actualServerName,
+                'password': distributorPassword
             });
 
             // Create distribution database
             await this.sqlService.executeProcedure(connection, 'sp_adddistributiondb', {
-                'database': distributionDb,          // Removed @ prefix
-                'data_folder': null,                // Removed @ prefix
-                'data_file': null,                  // Removed @ prefix
-                'log_folder': null,                 // Removed @ prefix
-                'log_file': null,                   // Removed @ prefix
-                'security_mode': 1,                 // Removed @ prefix
-                'login': null,                      // Removed @ prefix
-                'password': null                    // Removed @ prefix
+                'database': distributionDb,
+                'data_folder': null,
+                'data_file': null,
+                'log_folder': null,
+                'log_file': null,
+                'security_mode': 1,
+                'login': null,
+                'password': null
             });
 
-            // Configure the server as its own publisher
-            const defaultWorkingDir = workingDirectory || `\\\\${connection.serverName}\\repldata`;
+            // Configure the server as its own publisher using the resolved name
+            const defaultWorkingDir = workingDirectory || `\\\\${actualServerName}\\repldata`;
             await this.sqlService.executeProcedure(connection, 'sp_adddistpublisher', {
-                'publisher': connection.serverName,         // Removed @ prefix
-                'distribution_db': distributionDb,         // Removed @ prefix
-                'working_directory': defaultWorkingDir,    // Removed @ prefix
-                'security_mode': 1,                       // Removed @ prefix
-                'trusted': 'true',                        // Removed @ prefix
-                'login': null,                           // Removed @ prefix
-                'password': null                         // Removed @ prefix
+                'publisher': actualServerName,
+                'distribution_db': distributionDb,
+                'working_directory': defaultWorkingDir,
+                'security_mode': 1  // Windows Authentication
             });
         } catch (error) {
             console.error('Failed to configure distributor:', error);
@@ -364,6 +384,9 @@ export class ReplicationService {
 
     public async getPublications(connection: SqlServerConnection): Promise<Publication[]> {
         try {
+            // First resolve the actual server name
+            const actualServerName = await this.resolveServerName(connection);
+            
             // First validate the distributor to ensure we can query publications
             const isDistributorValid = await this.validateDistributor(connection);
             if (!isDistributorValid) {
@@ -577,6 +600,9 @@ export class ReplicationService {
 
     public async getSubscriptions(connection: SqlServerConnection): Promise<Subscription[]> {
         try {
+            // First resolve the actual server name
+            const actualServerName = await this.resolveServerName(connection);
+            
             // Get all user databases
             const databasesResult = await this.sqlService.executeQuery<{ name: string }>(connection, `
                 SELECT name FROM sys.databases 
@@ -586,7 +612,7 @@ export class ReplicationService {
             `) || [];
             
             const databases = databasesResult.map(db => db.name);
-            console.log(`Found ${databases.length} user databases to check for subscriptions on ${connection.serverName}`);
+            console.log(`Found ${databases.length} user databases to check for subscriptions on ${actualServerName}`);
             
             const allSubscriptions: Subscription[] = [];
             
@@ -620,7 +646,7 @@ export class ReplicationService {
                         JOIN dbo.MSpublications p ON a.publication_id = p.publication_id
                         WHERE p.publisher_id = (
                             SELECT publisher_id FROM dbo.MSpublishers 
-                            WHERE name = '${connection.serverName}'
+                            WHERE name = '${actualServerName}'
                         )
                         AND sub.status = 1 -- Only active subscriptions
                     `) || [];
@@ -631,7 +657,7 @@ export class ReplicationService {
                         const mappedLocalSubs = localSubs.map(sub => ({
                             name: `${sub.publication}_${sub.subscriber_db}`,
                             publication: sub.publication,
-                            publisher: connection.serverName,
+                            publisher: actualServerName,
                             publisherDb: sub.publisher_db,
                             subscriberDb: sub.subscriber_db,
                             subscription_type: sub.subscription_type === 0 ? 'push' : 'pull' as SubscriptionType,
@@ -660,7 +686,7 @@ export class ReplicationService {
                             FROM [${distInfo.distributionDb}].dbo.MSpublications p
                             JOIN [${distInfo.distributionDb}].dbo.MSpublishers srv 
                                 ON p.publisher_id = srv.publisher_id
-                            WHERE srv.name = '${connection.serverName}'
+                            WHERE srv.name = '${actualServerName}'
                         `) || [];
                         
                         if (basicPubInfo.length > 0) {
@@ -684,7 +710,7 @@ export class ReplicationService {
                                         allSubscriptions.push({
                                             name: `${pub.publication}_${subscriberDb}`,
                                             publication: pub.publication,
-                                            publisher: connection.serverName,
+                                            publisher: actualServerName,
                                             publisherDb: pub.pub_db,
                                             subscriberDb: subscriberDb,
                                             subscription_type: 'push' as SubscriptionType,
@@ -873,6 +899,71 @@ export class ReplicationService {
             }
         } catch (error) {
             console.error('Failed to drop subscription:', error);
+            throw error;
+        }
+    }
+
+    public async removeReplication(connection: SqlServerConnection): Promise<void> {
+        try {
+            // First resolve the actual server name
+            const actualServerName = await this.resolveServerName(connection);
+            
+            // Switch to master database
+            await this.sqlService.executeQuery(connection, 'USE [master]');
+
+            // 1. Remove replication objects from all subscription databases
+            const databases = await this.sqlService.executeQuery<{ name: string }>(connection, `
+                SELECT name FROM sys.databases 
+                WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb', 'distribution')
+            `);
+            
+            for (const db of databases) {
+                try {
+                    await this.sqlService.executeProcedure(connection, 'sp_removedbreplication', {
+                        'dbname': db.name
+                    });
+                    console.log(`Disabled replication for database: ${db.name}`);
+                } catch (error) {
+                    console.log(`Failed to disable replication for ${db.name}, continuing:`, error);
+                }
+            }
+
+            // 2. Remove the server as a publisher
+            try {
+                await this.sqlService.executeProcedure(connection, 'sp_dropdistpublisher', {
+                    'publisher': actualServerName,
+                    'no_checks': 1
+                });
+            } catch (error) {
+                console.log('Failed to remove publisher, continuing:', error);
+            }
+
+            // 3. Drop the distribution database with force
+            try {
+                // First set single user mode to force close connections
+                await this.sqlService.executeQuery(connection, `
+                    IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'distribution')
+                    BEGIN
+                        ALTER DATABASE distribution SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                        EXEC sp_dropdistributiondb @database = 'distribution';
+                    END
+                `);
+            } catch (error) {
+                console.log('Failed to drop distribution database, continuing:', error);
+            }
+
+            // 4. Finally remove the distributor
+            try {
+                await this.sqlService.executeProcedure(connection, 'sp_dropdistributor', {
+                    'no_checks': 1,
+                    'ignore_distributor': 1
+                });
+            } catch (error) {
+                console.log('Failed to remove distributor, continuing:', error);
+            }
+
+        } catch (error) {
+            console.error('Failed to remove replication:', error);
             throw error;
         }
     }

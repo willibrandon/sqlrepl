@@ -104,6 +104,12 @@
         "title": "View Agent History",
         "category": "SQL Replication",
         "icon": "$(history)"
+      },
+      {
+        "command": "sqlrepl.removeReplication",
+        "title": "Disable Publishing and Distribution",
+        "category": "SQL Replication",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -164,6 +170,11 @@
           "command": "sqlrepl.viewAgentHistory",
           "when": "view == replicationTree && (viewItem == agent-idle || viewItem == agent-running)",
           "group": "inline@2"
+        },
+        {
+          "command": "sqlrepl.removeReplication",
+          "when": "view == replicationTree && viewItem == server",
+          "group": "2_configuration@1"
         }
       ]
     }
