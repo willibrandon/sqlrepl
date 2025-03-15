@@ -4,11 +4,18 @@ import { Publication } from '../services/interfaces/publicationTypes';
 import { Subscription } from '../services/interfaces/subscriptionTypes';
 import { AgentJob, AgentType } from '../services/agentService';
 
+/** Type representing the different kinds of items that can appear in the replication tree view */
 export type TreeItemType = 'server' | 'publications' | 'subscriptions' | 'agents' | 'publication' | 'subscription' | 'agent';
 
+/**
+ * Represents a SQL Server instance in the tree view.
+ * Displays server name, authentication type, and database information.
+ */
 export class ServerTreeItem extends vscode.TreeItem {
     constructor(
+        /** The connection details for this server */
         public readonly connection: SqlServerConnection,
+        /** Whether this item can be expanded */
         public readonly collapsibleState: vscode.TreeItemCollapsibleState
     ) {
         super(connection.serverName, collapsibleState);
@@ -19,11 +26,19 @@ export class ServerTreeItem extends vscode.TreeItem {
     }
 }
 
+/**
+ * Represents a folder node in the tree view that groups related items.
+ * Can be a publications, subscriptions, or agents folder.
+ */
 export class FolderTreeItem extends vscode.TreeItem {
     constructor(
+        /** Display name of the folder */
         public readonly label: string,
+        /** Type of items contained in this folder */
         public readonly type: TreeItemType,
+        /** ID of the server this folder belongs to */
         public readonly serverId: string,
+        /** Whether this folder can be expanded */
         public readonly collapsibleState: vscode.TreeItemCollapsibleState
     ) {
         super(label, collapsibleState);
@@ -46,10 +61,18 @@ export class FolderTreeItem extends vscode.TreeItem {
     }
 }
 
+/**
+ * Represents a publication in the tree view.
+ * Displays publication details including name, type, status, and configuration.
+ * Uses different icons based on publication type (transactional vs snapshot).
+ */
 export class PublicationTreeItem extends vscode.TreeItem {
     constructor(
+        /** The publication details */
         public readonly publication: Publication,
+        /** ID of the server this publication belongs to */
         public readonly serverId: string,
+        /** Whether this publication can be expanded */
         public readonly collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None
     ) {
         super(publication.name, collapsibleState);
@@ -80,10 +103,18 @@ export class PublicationTreeItem extends vscode.TreeItem {
     }
 }
 
+/**
+ * Represents a subscription in the tree view.
+ * Displays subscription details including publisher, subscriber, and type information.
+ * Uses different icons based on subscription type (push vs pull).
+ */
 export class SubscriptionTreeItem extends vscode.TreeItem {
     constructor(
+        /** The subscription details */
         public readonly subscription: Subscription,
+        /** ID of the server this subscription belongs to */
         public readonly serverId: string,
+        /** Whether this subscription can be expanded */
         public readonly collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None
     ) {
         // Create a more descriptive name if the subscription name is not available
@@ -119,10 +150,19 @@ export class SubscriptionTreeItem extends vscode.TreeItem {
     }
 }
 
+/**
+ * Represents a replication agent in the tree view.
+ * Displays agent details including status, last run time, and outcome.
+ * Uses different icons based on agent type (snapshot, log reader, distribution, merge).
+ * Provides contextual information about the agent's current state (running vs idle).
+ */
 export class AgentTreeItem extends vscode.TreeItem {
     constructor(
+        /** The agent job details */
         public readonly agent: AgentJob,
+        /** ID of the server this agent belongs to */
         public readonly serverId: string,
+        /** Whether this agent can be expanded */
         public readonly collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None
     ) {
         super(agent.name, collapsibleState);
@@ -177,4 +217,4 @@ export class AgentTreeItem extends vscode.TreeItem {
         
         this.iconPath = new vscode.ThemeIcon(iconName);
     }
-} 
+}

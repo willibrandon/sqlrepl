@@ -3,17 +3,31 @@ import { ConnectionService } from '../services/connectionService';
 import { AgentService } from '../services/agentService';
 import { AgentTreeItem } from '../features/treeItems';
 
+/** Represents an entry in the agent job history with execution details */
 interface JobHistoryEntry {
+    /** When the job was executed */
     runDate: Date;
+    /** Name of the executed step */
     stepName: string;
+    /** Execution outcome status */
     status: 'Succeeded' | 'Failed' | 'In Progress' | string;
+    /** How long the job ran */
     runDuration: string;
+    /** Detailed message about the execution */
     message: string;
 }
 
+/**
+ * Manages VS Code commands related to SQL Server replication agents.
+ * Provides functionality to start, stop, and view history of replication agents.
+ */
 export class AgentCommands {
     constructor(private context: vscode.ExtensionContext) {}
 
+    /**
+     * Registers all agent-related commands with VS Code.
+     * This includes commands for starting, stopping, and viewing agent history.
+     */
     registerCommands(): void {
         // Register commands
         this.context.subscriptions.push(
@@ -23,6 +37,13 @@ export class AgentCommands {
         );
     }
 
+    /**
+     * Starts a replication agent job.
+     * Shows error if no agent is selected or if the agent is already running.
+     * Refreshes the tree view upon successful start.
+     * 
+     * @param node - The tree item representing the agent to start
+     */
     private async startAgent(node?: AgentTreeItem): Promise<void> {
         if (!node) {
             vscode.window.showErrorMessage('Please select an agent to start');
@@ -57,6 +78,14 @@ export class AgentCommands {
         }
     }
 
+    /**
+     * Stops a running replication agent job.
+     * Shows confirmation dialog before stopping.
+     * Shows error if no agent is selected or if the agent is not running.
+     * Refreshes the tree view upon successful stop.
+     * 
+     * @param node - The tree item representing the agent to stop
+     */
     private async stopAgent(node?: AgentTreeItem): Promise<void> {
         if (!node) {
             vscode.window.showErrorMessage('Please select an agent to stop');
@@ -102,6 +131,13 @@ export class AgentCommands {
         }
     }
 
+    /**
+     * Displays the execution history of a replication agent in a webview.
+     * Shows error if no agent is selected or if history cannot be retrieved.
+     * Creates a formatted HTML view with status indicators and detailed information.
+     * 
+     * @param node - The tree item representing the agent to view history for
+     */
     private async viewAgentHistory(node?: AgentTreeItem): Promise<void> {
         if (!node) {
             vscode.window.showErrorMessage('Please select an agent to view history');
@@ -141,6 +177,15 @@ export class AgentCommands {
         }
     }
 
+    /**
+     * Generates HTML content for the agent history webview.
+     * Includes styling with VS Code theme colors and status indicators.
+     * 
+     * @param agentName - Name of the agent
+     * @param agentType - Type of the agent (Snapshot, Log Reader, etc.)
+     * @param history - Array of job history entries to display
+     * @returns Formatted HTML string for the webview
+     */
     private getHistoryWebviewContent(agentName: string, agentType: string, history: JobHistoryEntry[]): string {
         // Format the history entries as a table
         const tableRows = history.map(entry => {
@@ -263,6 +308,12 @@ export class AgentCommands {
         `;
     }
 
+    /**
+     * Escapes HTML special characters to prevent XSS in the webview.
+     * 
+     * @param unsafe - Raw string that may contain HTML special characters
+     * @returns Escaped string safe for HTML insertion
+     */
     private escapeHtml(unsafe: string): string {
         return unsafe
             .replace(/&/g, "&amp;")

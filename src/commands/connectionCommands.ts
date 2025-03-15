@@ -2,15 +2,34 @@ import * as vscode from 'vscode';
 import { ConnectionService, SqlServerConnection } from '../services/connectionService';
 import { v4 as uuidv4 } from 'uuid';
 
+/**
+ * Manages VS Code commands related to SQL Server connections.
+ * Provides functionality to add and manage server connections in the extension.
+ */
 export class ConnectionCommands {
     constructor(private context: vscode.ExtensionContext) {}
 
+    /**
+     * Registers all connection-related commands with VS Code.
+     * Currently supports adding new server connections.
+     */
     public registerCommands(): void {
         this.context.subscriptions.push(
             vscode.commands.registerCommand('sqlrepl.addConnection', () => this.addConnection())
         );
     }
 
+    /**
+     * Handles the process of adding a new SQL Server connection.
+     * Prompts user for:
+     * - Server name
+     * - Authentication type (Windows or SQL Server)
+     * - Credentials (if using SQL Server authentication)
+     * - Optional database name
+     * 
+     * Creates and stores the connection, then refreshes the tree view.
+     * Shows appropriate error messages if the process fails.
+     */
     private async addConnection(): Promise<void> {
         try {
             // Get server name
@@ -87,7 +106,7 @@ export class ConnectionCommands {
             };
 
             // Store connection
-            await ConnectionService.getInstance(this.context).addConnection(connection);
+            ConnectionService.getInstance(this.context).addConnection(connection);
 
             // Show success message
             vscode.window.showInformationMessage(`Successfully added connection to ${serverName}`);

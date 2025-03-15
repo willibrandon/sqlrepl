@@ -3,6 +3,10 @@ import { ConnectionService } from '../services/connectionService';
 import { ServerTreeItem } from '../features/treeItems';
 import { DistributorService } from '../services/distributorService';
 
+/**
+ * Manages VS Code commands related to SQL Server instances.
+ * Provides functionality to remove servers and their replication configuration.
+ */
 export class ServerCommands {
     private context: vscode.ExtensionContext;
 
@@ -10,6 +14,12 @@ export class ServerCommands {
         this.context = context;
     }
 
+    /**
+     * Registers all server-related commands with VS Code.
+     * Includes commands for:
+     * - Removing a server from the connection list
+     * - Removing replication configuration from a server
+     */
     public registerCommands(): void {
         this.context.subscriptions.push(
             vscode.commands.registerCommand('sqlrepl.removeServer', (node?: ServerTreeItem) => this.removeServer(node))
@@ -45,6 +55,13 @@ export class ServerCommands {
         );
     }
 
+    /**
+     * Removes a server from the connection list.
+     * Shows a confirmation dialog before removal.
+     * Refreshes the tree view after successful removal.
+     * 
+     * @param node - The tree item representing the server to remove
+     */
     private async removeServer(node?: ServerTreeItem): Promise<void> {
         try {
             if (!node) {
@@ -70,4 +87,4 @@ export class ServerCommands {
             vscode.window.showErrorMessage(`Failed to remove server: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
-} 
+}

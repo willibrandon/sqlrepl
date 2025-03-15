@@ -6,6 +6,10 @@ import { SubscriptionOptions } from '../services/interfaces/subscriptionTypes';
 import { FolderTreeItem, PublicationTreeItem, SubscriptionTreeItem } from '../features/treeItems';
 import { SubscriptionType } from '../services/interfaces/replicationTypes';
 
+/**
+ * Manages VS Code commands related to SQL Server replication subscriptions.
+ * Provides functionality to create, reinitialize, and drop subscriptions.
+ */
 export class SubscriptionCommands {
     private publicationService: PublicationService;
     private subscriptionService: SubscriptionService;
@@ -15,6 +19,13 @@ export class SubscriptionCommands {
         this.subscriptionService = SubscriptionService.getInstance();
     }
 
+    /**
+     * Registers all subscription-related commands with VS Code.
+     * Includes commands for:
+     * - Creating new subscriptions
+     * - Reinitializing existing subscriptions
+     * - Dropping subscriptions
+     */
     public registerCommands(): void {
         this.context.subscriptions.push(
             vscode.commands.registerCommand('sqlrepl.createSubscription', (node?: PublicationTreeItem | FolderTreeItem) => this.createSubscription(node)),
@@ -23,6 +34,19 @@ export class SubscriptionCommands {
         );
     }
 
+    /**
+     * Handles the process of creating a new subscription.
+     * Includes:
+     * 1. Server/publication selection (if not provided)
+     * 2. Subscription type selection (push/pull)
+     * 3. Database configuration
+     * 4. Synchronization type selection
+     * 5. Remote connection credentials (if needed)
+     * 
+     * Shows progress during creation and refreshes the tree view upon completion.
+     * 
+     * @param node - Optional tree item indicating where to create the subscription
+     */
     private async createSubscription(node?: PublicationTreeItem | FolderTreeItem): Promise<void> {
         try {
             let serverId: string | undefined;
@@ -240,6 +264,13 @@ export class SubscriptionCommands {
         }
     }
 
+    /**
+     * Reinitializes an existing subscription.
+     * Shows confirmation dialog before proceeding.
+     * Updates the tree view after successful reinitialization.
+     * 
+     * @param node - The tree item representing the subscription to reinitialize
+     */
     private async reinitializeSubscription(node?: SubscriptionTreeItem): Promise<void> {
         try {
             if (!node) {
@@ -295,6 +326,13 @@ export class SubscriptionCommands {
         }
     }
 
+    /**
+     * Drops (removes) an existing subscription.
+     * Shows confirmation dialog before proceeding.
+     * Updates the tree view after successful removal.
+     * 
+     * @param node - The tree item representing the subscription to drop
+     */
     private async dropSubscription(node?: SubscriptionTreeItem): Promise<void> {
         try {
             if (!node) {
@@ -350,4 +388,4 @@ export class SubscriptionCommands {
             vscode.window.showErrorMessage(`Failed to drop subscription: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
-} 
+}

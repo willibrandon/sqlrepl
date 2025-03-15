@@ -6,6 +6,10 @@ import { PublicationOptions } from '../services/interfaces/publicationTypes';
 import { ReplicationType } from '../services/interfaces/replicationTypes';
 import { FolderTreeItem } from '../features/treeItems';
 
+/**
+ * Manages VS Code commands related to SQL Server replication publications.
+ * Provides functionality to create and manage publications, including distributor configuration.
+ */
 export class PublicationCommands {
     private publicationService: PublicationService;
 
@@ -13,12 +17,30 @@ export class PublicationCommands {
         this.publicationService = PublicationService.getInstance();
     }
 
+    /**
+     * Registers all publication-related commands with VS Code.
+     * Currently supports creating new publications.
+     */
     public registerCommands(): void {
         this.context.subscriptions.push(
             vscode.commands.registerCommand('sqlrepl.createPublication', (node?: FolderTreeItem) => this.createPublication(node))
         );
     }
 
+    /**
+     * Handles the process of creating a new publication.
+     * Includes:
+     * 1. Server selection (if not provided)
+     * 2. Distributor configuration (if needed)
+     * 3. Publication type selection (snapshot/transactional)
+     * 4. Publication name and database selection
+     * 5. Snapshot folder configuration
+     * 6. Article (table) selection
+     * 
+     * Shows progress during creation and refreshes the tree view upon completion.
+     * 
+     * @param node - Optional folder tree item indicating where to create the publication
+     */
     private async createPublication(node?: FolderTreeItem): Promise<void> {
         try {
             // If node is not provided, we need to get the server first
@@ -219,4 +241,4 @@ export class PublicationCommands {
             vscode.window.showErrorMessage(`Failed to create publication: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
-} 
+}
