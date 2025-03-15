@@ -2,12 +2,19 @@ import * as path from 'path';
 import Mocha = require('mocha');
 import { glob } from 'glob';
 
+/**
+ * Runs the extension's test suite.
+ * Sets up and executes Mocha tests with BDD interface and color output.
+ * 
+ * @throws {Error} When any test fails, with the count of failed tests
+ * @returns Promise that resolves when all tests pass
+ */
 export async function run(): Promise<void> {
     // Create the mocha test
     const mocha = new Mocha({
         ui: 'bdd',
         color: true,
-        timeout: 60000
+        timeout: 60000  // 60 second timeout
     });
 
     const testsRoot = path.resolve(__dirname, '.');
