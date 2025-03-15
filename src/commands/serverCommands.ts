@@ -1,15 +1,13 @@
 import * as vscode from 'vscode';
 import { ConnectionService } from '../services/connectionService';
 import { ServerTreeItem } from '../features/treeItems';
-import { ReplicationService } from '../services/replicationService';
+import { DistributorService } from '../services/distributorService';
 
 export class ServerCommands {
     private context: vscode.ExtensionContext;
-    private replicationService: ReplicationService;
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
-        this.replicationService = ReplicationService.getInstance();
     }
 
     public registerCommands(): void {
@@ -34,7 +32,7 @@ export class ServerCommands {
                             title: "Removing replication configuration...",
                             cancellable: false
                         }, async () => {
-                            await this.replicationService.removeReplication(node.connection);
+                            await DistributorService.getInstance().removeReplication(node.connection);
                         });
 
                         vscode.commands.executeCommand('sqlrepl.refreshTree');

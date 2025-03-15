@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionService } from '../services/connectionService';
 import { ReplicationService } from '../services/replicationService';
+import { DistributorService } from '../services/distributorService';
 import { PublicationOptions } from '../services/interfaces/publicationTypes';
 import { ReplicationType } from '../services/interfaces/replicationTypes';
 import { FolderTreeItem } from '../features/treeItems';
@@ -46,8 +47,7 @@ export class PublicationCommands {
             }
 
             // Check distributor configuration
-            const replicationService = ReplicationService.getInstance();
-            const distInfo = await replicationService.getDistributorInfo(connection);
+            const distInfo = await DistributorService.getInstance().getDistributorInfo(connection);
 
             if (!distInfo.isDistributor) {
                 const configureNow = await vscode.window.showQuickPick(
@@ -101,7 +101,7 @@ export class PublicationCommands {
                         cancellable: false
                     },
                     async () => {
-                        await replicationService.configureDistributor(connection, distributionDb, snapshotFolder);
+                        await DistributorService.getInstance().configureDistributor(connection, distributionDb, snapshotFolder);
                     }
                 );
 
@@ -149,7 +149,7 @@ export class PublicationCommands {
             }
 
             // Validate distributor configuration after database selection
-            const isDistributorValid = await ReplicationService.getInstance().validateDistributor(connection);
+            const isDistributorValid = await DistributorService.getInstance().validateDistributor(connection);
             if (!isDistributorValid) {
                 throw new Error('Distribution is not configured for this server. Please configure distribution first.');
             }
