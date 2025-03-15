@@ -329,7 +329,7 @@ export class SubscriptionService {
                                 subscriber: string;
                                 subscriber_db: string;
                                 status: string;
-                            }>(connection, `EXEC sp_helpsubscription @active_only = 1`) || [];
+                            }>(connection, `EXEC sp_helpsubscription`) || [];
                             
                             if (subscriptions.length > 0) {
                                 const mappedSubscriptions = subscriptions.map(sub => ({
@@ -356,7 +356,7 @@ export class SubscriptionService {
                                 publisher: string;
                                 publisher_db: string;
                                 publication: string;
-                            }>(connection, `EXEC sp_helppullsubscription @active_only = 1`) || [];
+                            }>(connection, `EXEC sp_helppullsubscription`) || [];
                             
                             if (pullSubscriptions.length > 0) {
                                 const mappedPullSubscriptions = pullSubscriptions.map(sub => ({
@@ -474,46 +474,36 @@ export class SubscriptionService {
      */
     public async verifySubscriptionExists(connection: SqlServerConnection, subscription: Subscription): Promise<boolean> {
         try {
-            // Check if subscription still exists in SQL Server
-            const result = await this.sqlService.executeQuery<{ exists: number }>(connection, `
-                DECLARE @exists INT = 0
-                
-                -- First check the MSsubscriptions table if we have distributor access
-                IF DB_ID('distribution') IS NOT NULL
-                BEGIN
-                    SELECT @exists = COUNT(*)
-                    FROM distribution.dbo.MSsubscriptions sub
-                    JOIN distribution.dbo.MSarticles a ON sub.article_id = a.article_id
-                    JOIN distribution.dbo.MSpublications p ON a.publication_id = p.publication_id
-                    WHERE p.name = '${subscription.publication}'
-                    AND sub.subscriber_db = '${subscription.subscriberDb}'
-                    AND sub.status = 1 -- Only active subscriptions
-                END
-                
-                -- If we didn't find it, try using stored procedures
-                IF @exists = 0
-                BEGIN
-                    BEGIN TRY
-                        EXEC sp_helpsubscription 
-                            @publication = '${subscription.publication}',
-                            @publisher = '${subscription.publisher}',
-                            @destination_db = '${subscription.subscriberDb}',
-                            @active_only = 1
-                            
-                        -- If we get here without error, the subscription exists
-                        SET @exists = 1
-                    END TRY
-                    BEGIN CATCH
-                        -- If error, the subscription might not exist
-                        SET @exists = 0
-                    END CATCH
-                END
-                
-                -- Return the result
-                SELECT @exists AS exists
-            `);
-            
-            return result && result.length > 0 && result[0].exists > 0;
+            // First try to verify using sp_helpsubscription
+            try {
+                await this.sqlService.executeQuery(connection, `
+                    USE [${subscription.publisherDb}];
+                    EXEC sp_helpsubscription 
+                        @publication = '${subscription.publication}',
+                        @subscriber = '${subscription.subscriberDb}'
+                `);
+                // If we get here without error, the subscription exists
+                return true;
+            } catch (error) {
+                // If sp_helpsubscription fails, try checking the distribution database
+                try {
+                    const result = await this.sqlService.executeQuery<{ count: number }>(connection, `
+                        USE [distribution];
+                        SELECT COUNT(*) as count
+                        FROM dbo.MSsubscriptions sub
+                        JOIN dbo.MSarticles a ON sub.article_id = a.article_id
+                        JOIN dbo.MSpublications p ON a.publication_id = p.publication_id
+                        WHERE p.name = '${subscription.publication}'
+                        AND sub.subscriber_db = '${subscription.subscriberDb}'
+                        AND sub.status = 1;
+                    `);
+                    
+                    return result && result.length > 0 && result[0].count > 0;
+                } catch (distributionError) {
+                    console.log('Failed to check distribution database:', distributionError);
+                    return false;
+                }
+            }
         } catch (error) {
             console.error(`Error verifying subscription ${subscription.name}:`, error);
             return false;
