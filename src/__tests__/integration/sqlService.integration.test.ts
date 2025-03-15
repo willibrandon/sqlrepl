@@ -15,10 +15,14 @@ describe('SqlService Integration Tests', () => {
     let sqlService: TestSqlService;
     let pool: ConnectionPool | null;
 
-    const TEST_CONNECTION_STRING = 'Server=localhost;Database=TestDB;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True';
+    // Use environment variable for connection string
+    const TEST_CONNECTION_STRING = process.env.TEST_CONNECTION_STRING || 'Server=localhost;Database=TestDB;User Id=testuser;Password=Test@Password123;TrustServerCertificate=True';
 
     beforeAll(() => {
         sqlService = new TestSqlService();
+        // Log the connection string being used (with password masked)
+        const maskedConnectionString = TEST_CONNECTION_STRING.replace(/Password=[^;]+/, 'Password=***');
+        console.log('Using connection string:', maskedConnectionString);
     });
 
     afterEach(async () => {
@@ -34,7 +38,7 @@ describe('SqlService Integration Tests', () => {
         expect(config).toBeDefined();
         expect(config.server).toBe('localhost');
         expect(config.database).toBe('TestDB');
-        expect(config.user).toBe('sa');
+        expect(config.user).toBe('testuser');
         expect(config.options).toBeDefined();
         expect(config.options?.trustServerCertificate).toBe(true);
         expect(config.options?.encrypt).toBe(true);
