@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { MonitoringService } from '../services/monitoringService';
 import type { ReplicationHealth } from '../services/interfaces/monitoringTypes';
+import { ConnectionService } from '../services/connectionService';
 
 /**
  * Manages the monitoring dashboard webview panel.
@@ -30,12 +31,27 @@ export class MonitoringDashboard {
      * Shows or brings to focus the monitoring dashboard.
      */
     public show(): void {
+        console.log('Opening monitoring dashboard...');
+        
+        // Get all connections
+        const connectionService = ConnectionService.getInstance();
+        const connections = connectionService.getConnections();
+        
+        if (!connections || connections.length === 0) {
+            vscode.window.showErrorMessage('No SQL Server connections found. Please add a connection first.');
+            return;
+        }
+        
+        console.log(`Found ${connections.length} connections to monitor`);
+
         if (this.panel) {
+            console.log('Dashboard panel already exists, revealing...');
             this.panel.reveal();
             return;
         }
 
         // Create and show panel
+        console.log('Creating new dashboard panel...');
         this.panel = vscode.window.createWebviewPanel(
             'sqlReplicationMonitoring',
             'SQL Replication Monitor',
@@ -47,6 +63,7 @@ export class MonitoringDashboard {
         );
 
         // Set initial HTML content
+        console.log('Setting initial dashboard content...');
         this.updateContent({ 
             status: 'Healthy',
             alerts: [],
@@ -58,8 +75,16 @@ export class MonitoringDashboard {
         });
 
         // Handle health updates
+        console.log('Setting up health update handler...');
         this.disposables.push(
             this.monitoringService.onHealthUpdate(health => {
+                console.log('Received health update:', {
+                    status: health.status,
+                    agents: health.agents.length,
+                    metrics: health.latencyMetrics.length,
+                    tokens: health.tracerTokens.length,
+                    stats: health.publicationStats.length
+                });
                 if (this.panel) {
                     this.updateContent(health);
                 }
@@ -68,12 +93,14 @@ export class MonitoringDashboard {
 
         // Clean up resources when panel is closed
         this.panel.onDidDispose(() => {
+            console.log('Dashboard panel disposed');
             this.dispose();
         }, null, this.disposables);
 
         // Handle messages from the webview
         this.panel.webview.onDidReceiveMessage(
             async message => {
+                console.log('Received message from webview:', message);
                 switch (message.command) {
                     case 'clearAlert':
                         this.monitoringService.clearAlert(message.alertId);
@@ -88,6 +115,7 @@ export class MonitoringDashboard {
         );
 
         // Start monitoring
+        console.log('Starting monitoring service...');
         this.monitoringService.startMonitoring();
     }
 
@@ -96,8 +124,17 @@ export class MonitoringDashboard {
      */
     private updateContent(health: ReplicationHealth): void {
         if (!this.panel) {
+            console.log('Cannot update content: panel is undefined');
             return;
         }
+
+        console.log('Updating dashboard content with health data:', {
+            status: health.status,
+            agents: health.agents.length,
+            metrics: health.latencyMetrics.length,
+            tokens: health.tracerTokens.length,
+            stats: health.publicationStats.length
+        });
 
         const config = this.monitoringService.getConfig();
         

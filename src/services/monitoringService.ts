@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { SqlServerConnection } from './connectionService';
 import { SqlService } from './sqlService';
 import { ReplicationLatency, ReplicationHealth, MonitoringConfig, ReplicationAlert, AgentStatus, TracerTokenResult, PublicationStats } from './interfaces/monitoringTypes';
+import { ConnectionService } from './connectionService';
+import { AgentType } from './agentService';
 
 /**
  * Service for monitoring SQL Server replication health and performance.
@@ -28,8 +30,8 @@ export class MonitoringService {
         this.config = {
             maxLatencyWarningThreshold: 300, // 5 minutes
             maxLatencyCriticalThreshold: 900, // 15 minutes
-            maxPendingCommandsWarningThreshold: 1000,
-            maxPendingCommandsCriticalThreshold: 5000,
+            maxPendingCommandsWarningThreshold: 10000,
+            maxPendingCommandsCriticalThreshold: 50000,
             pollingIntervalMs: 60000, // 1 minute
             enableTracerTokens: true,
             tracerTokenIntervalMinutes: 15,
@@ -61,34 +63,28 @@ export class MonitoringService {
     public updateConfig(newConfig: Partial<MonitoringConfig>): void {
         this.config = { ...this.config, ...newConfig };
         
-        // Restart polling with new interval if it changed
-        if (newConfig.pollingIntervalMs && this.pollingInterval) {
-            this.stopMonitoring();
-            this.startMonitoring();
-        }
-
-        // Update tracer token monitoring
-        if (newConfig.enableTracerTokens !== undefined || newConfig.tracerTokenIntervalMinutes !== undefined) {
-            this.setupTracerTokenMonitoring();
-        }
+        // Restart monitoring with new config
+        this.stopMonitoring();
+        this.startMonitoring();
     }
 
     /**
      * Starts monitoring replication health.
      */
     public startMonitoring(): void {
-        if (this.pollingInterval) {
-            clearInterval(this.pollingInterval);
-        }
-
+        console.log('Starting monitoring service...');
+        
+        // Clear any existing intervals
+        this.stopMonitoring();
+        
         // Initial check
-        this.checkHealth();
-
+        void this.checkHealth();
+        
         // Set up polling interval
         this.pollingInterval = setInterval(() => {
-            this.checkHealth();
+            void this.checkHealth();
         }, this.config.pollingIntervalMs);
-
+        
         // Set up tracer token monitoring
         this.setupTracerTokenMonitoring();
     }
@@ -97,14 +93,9 @@ export class MonitoringService {
      * Sets up tracer token monitoring if enabled
      */
     private setupTracerTokenMonitoring(): void {
-        if (this.tracerTokenInterval) {
-            clearInterval(this.tracerTokenInterval);
-            this.tracerTokenInterval = undefined;
-        }
-
         if (this.config.enableTracerTokens) {
             this.tracerTokenInterval = setInterval(() => {
-                this.insertAndMonitorTracerTokens();
+                void this.insertAndMonitorTracerTokens();
             }, this.config.tracerTokenIntervalMinutes * 60 * 1000);
         }
     }
@@ -128,96 +119,117 @@ export class MonitoringService {
      */
     private async getAgentStatus(connection: SqlServerConnection): Promise<AgentStatus[]> {
         try {
-            const agents = await this.sqlService.executeQuery<{
-                name: string;
-                type: string;
-                status: number;
-                start_time: Date;
-                duration: number;
-                last_outcome: number;
-                error_message: string;
-                commands_per_sec: number;
-                avg_latency: number;
-                memory_mb: number;
-                cpu_percent: number;
+            const agents: AgentStatus[] = [];
+
+            // Get publisher information
+            const publishers = await this.sqlService.executeQuery<{
+                publisher: string;
+                publisher_db: string;
             }>(connection, `
-                USE msdb;
-                SELECT 
-                    j.name,
-                    CASE 
-                        WHEN j.name LIKE '%snapshot%' THEN 'Snapshot'
-                        WHEN j.name LIKE '%logreader%' THEN 'LogReader'
-                        WHEN j.name LIKE '%distribution%' THEN 'Distribution'
-                    END as type,
-                    ja.run_status as status,
-                    ja.start_execution_date as start_time,
-                    DATEDIFF(second, ja.start_execution_date, ISNULL(ja.stop_execution_date, GETDATE())) as duration,
-                    jh.run_status as last_outcome,
-                    jh.message as error_message,
-                    p.commands_per_sec,
-                    p.avg_latency,
-                    p.memory_mb,
-                    p.cpu_percent
-                FROM sysjobs j
-                LEFT JOIN sysjobactivity ja ON j.job_id = ja.job_id
-                LEFT JOIN sysjobhistory jh ON j.job_id = jh.job_id
-                CROSS APPLY (
-                    SELECT 
-                        AVG(delivered_commands) as commands_per_sec,
-                        AVG(delivery_latency) as avg_latency,
-                        AVG(memory_usage) as memory_mb,
-                        AVG(cpu_usage) as cpu_percent
-                    FROM distribution.dbo.MSrepl_performance_monitoring
-                    WHERE agent_id = j.job_id
-                    AND collection_time > DATEADD(minute, -5, GETDATE())
-                ) p
-                WHERE j.category_id = 2 -- Replication category
+                USE distribution
+                EXEC sp_replmonitorhelppublisher
             `);
 
-            return agents.map(a => ({
-                name: a.name,
-                type: a.type as 'Snapshot' | 'LogReader' | 'Distribution',
-                status: this.mapAgentStatus(a.status),
-                lastStartTime: a.start_time,
-                lastRunDuration: a.duration,
-                lastRunOutcome: this.mapAgentOutcome(a.last_outcome),
-                errorMessage: a.error_message,
-                performance: {
-                    commandsPerSecond: a.commands_per_sec,
-                    averageLatency: a.avg_latency,
-                    memoryUsageMB: a.memory_mb,
-                    cpuUsagePercent: a.cpu_percent
-                }
-            }));
+            // Process each publisher
+            for (const pub of publishers) {
+                // Get snapshot agent status
+                const snapshotAgents = await this.sqlService.executeProcedure<{
+                    agent_name: string;
+                    status: number;
+                    start_time: Date;
+                    duration: number;
+                    last_message: string;
+                    delivery_rate: number;
+                    delivery_latency: number;
+                }>(connection, 'distribution.dbo.sp_replmonitorhelpsnapshotagent', {
+                    publisher: pub.publisher,
+                    publisher_db: pub.publisher_db
+                });
+
+                // Get log reader agent status
+                const logReaderAgents = await this.sqlService.executeProcedure<{
+                    agent_name: string;
+                    status: number;
+                    start_time: Date;
+                    duration: number;
+                    last_message: string;
+                    delivery_rate: number;
+                    delivery_latency: number;
+                }>(connection, 'distribution.dbo.sp_replmonitorhelplogreader', {
+                    publisher: pub.publisher,
+                    publisher_db: pub.publisher_db
+                });
+
+                // Get distribution agent status
+                const distributionAgents = await this.sqlService.executeProcedure<{
+                    agent_name: string;
+                    status: number;
+                    start_time: Date;
+                    duration: number;
+                    last_message: string;
+                    delivery_rate: number;
+                    delivery_latency: number;
+                }>(connection, 'distribution.dbo.sp_replmonitorhelpdistributor', {
+                    publisher: pub.publisher,
+                    publisher_db: pub.publisher_db
+                });
+
+                // Process snapshot agents
+                agents.push(...snapshotAgents.map(agent => ({
+                    name: agent.agent_name,
+                    type: this.mapAgentType(AgentType.SnapshotAgent),
+                    status: this.mapStatus(agent.status),
+                    lastStartTime: agent.start_time,
+                    lastRunDuration: agent.duration,
+                    lastRunOutcome: this.mapRunOutcome(agent.status),
+                    errorMessage: agent.last_message,
+                    performance: {
+                        commandsPerSecond: agent.delivery_rate || 0,
+                        averageLatency: agent.delivery_latency || 0,
+                        memoryUsageMB: 0,
+                        cpuUsagePercent: 0
+                    }
+                })));
+
+                // Process log reader agents
+                agents.push(...logReaderAgents.map(agent => ({
+                    name: agent.agent_name,
+                    type: this.mapAgentType(AgentType.LogReaderAgent),
+                    status: this.mapStatus(agent.status),
+                    lastStartTime: agent.start_time,
+                    lastRunDuration: agent.duration,
+                    lastRunOutcome: this.mapRunOutcome(agent.status),
+                    errorMessage: agent.last_message,
+                    performance: {
+                        commandsPerSecond: agent.delivery_rate || 0,
+                        averageLatency: agent.delivery_latency || 0,
+                        memoryUsageMB: 0,
+                        cpuUsagePercent: 0
+                    }
+                })));
+
+                // Process distribution agents
+                agents.push(...distributionAgents.map(agent => ({
+                    name: agent.agent_name,
+                    type: this.mapAgentType(AgentType.DistributionAgent),
+                    status: this.mapStatus(agent.status),
+                    lastStartTime: agent.start_time,
+                    lastRunDuration: agent.duration,
+                    lastRunOutcome: this.mapRunOutcome(agent.status),
+                    errorMessage: agent.last_message,
+                    performance: {
+                        commandsPerSecond: agent.delivery_rate || 0,
+                        averageLatency: agent.delivery_latency || 0,
+                        memoryUsageMB: 0,
+                        cpuUsagePercent: 0
+                    }
+                })));
+            }
+
+            return agents;
         } catch (error) {
             console.error('Failed to get agent status:', error);
             return [];
-        }
-    }
-
-    /**
-     * Maps agent status codes to status strings
-     */
-    private mapAgentStatus(status: number): AgentStatus['status'] {
-        switch (status) {
-            case 1: return 'Running';
-            case 2: return 'Retrying';
-            case 3: return 'Completing';
-            case 4: return 'Failed';
-            default: return 'Stopped';
-        }
-    }
-
-    /**
-     * Maps agent outcome codes to outcome strings
-     */
-    private mapAgentOutcome(outcome: number): AgentStatus['lastRunOutcome'] {
-        switch (outcome) {
-            case 1: return 'Succeeded';
-            case 0: return 'Failed';
-            case 2: return 'Retry';
-            case 3: return 'Cancelled';
-            default: return 'Failed';
         }
     }
 
@@ -226,22 +238,59 @@ export class MonitoringService {
      */
     private async getPublicationStats(connection: SqlServerConnection): Promise<PublicationStats[]> {
         try {
-            return await this.sqlService.executeQuery<PublicationStats>(connection, `
-                USE distribution;
-                SELECT 
-                    p.publication_name as name,
-                    COUNT(DISTINCT s.subscription_id) as subscriptionCount,
-                    COUNT(DISTINCT pa.article_id) as articleCount,
-                    SUM(ds.delivered_commands) as totalCommandsDelivered,
-                    AVG(ds.average_command_size) as averageCommandSize,
-                    MAX(p.retention) as retentionPeriod,
-                    AVG(ds.delivery_rate) as transactionsPerSecond
-                FROM MSpublications p
-                LEFT JOIN MSsubscriptions s ON p.publication_id = s.publication_id
-                LEFT JOIN MSarticles pa ON p.publication_id = pa.publication_id
-                LEFT JOIN MSdistribution_status ds ON p.publication_id = ds.publication_id
-                GROUP BY p.publication_name
-            `);
+            const publications = await this.sqlService.executeProcedure<{
+                publisher: string;
+                publisher_db: string;
+                publication: string;
+                publication_type: number;
+                status: number;
+                warning: number;
+                pending_commands: number;
+                retention_period: number;
+                worst_latency: number;
+                transaction_rate: number;
+            }>(connection, 'distribution.dbo.sp_replmonitorhelppublication');
+
+            return await Promise.all(publications.map(async pub => {
+                try {
+                    const subCount = await this.sqlService.executeQuery<{ count: number }>(connection, `
+                        USE distribution
+                        SELECT COUNT(*) as count
+                        FROM dbo.MSsubscriptions s
+                        WHERE publisher_db = '${pub.publisher_db}'
+                        AND publication = '${pub.publication}'
+                    `);
+
+                    const artCount = await this.sqlService.executeQuery<{ count: number }>(connection, `
+                        USE distribution
+                        SELECT COUNT(*) as count
+                        FROM dbo.MSarticles a
+                        WHERE publisher_db = '${pub.publisher_db}'
+                        AND publication = '${pub.publication}'
+                    `);
+
+                    return {
+                        name: pub.publication,
+                        subscriptionCount: subCount[0]?.count || 0,
+                        articleCount: artCount[0]?.count || 0,
+                        totalCommandsDelivered: pub.pending_commands || 0,
+                        averageCommandSize: 0,
+                        retentionPeriod: pub.retention_period,
+                        transactionsPerSecond: pub.transaction_rate || 0
+                    };
+                } catch (error) {
+                    console.error(`Failed to get counts for publication ${pub.publication}:`, error);
+                    return {
+                        name: pub.publication,
+                        subscriptionCount: 0,
+                        articleCount: 0,
+                        totalCommandsDelivered: pub.pending_commands || 0,
+                        averageCommandSize: 0,
+                        retentionPeriod: pub.retention_period,
+                        transactionsPerSecond: pub.transaction_rate || 0
+                    };
+                }
+            }));
         } catch (error) {
             console.error('Failed to get publication stats:', error);
             return [];
@@ -253,10 +302,10 @@ export class MonitoringService {
      */
     private async insertAndMonitorTracerTokens(): Promise<void> {
         try {
-            const connections = vscode.workspace.getConfiguration('sqlReplication').get<SqlServerConnection[]>('connections', []);
+            const connectionService = ConnectionService.getInstance();
+            const connections = connectionService.getConnections();
             
             for (const connection of connections) {
-                // Insert new tracer tokens for each publication
                 const publications = await this.sqlService.executeQuery<{ publication_id: number }>(
                     connection,
                     'SELECT publication_id FROM distribution.dbo.MSpublications'
@@ -279,35 +328,51 @@ export class MonitoringService {
      */
     private async getTracerTokenResults(connection: SqlServerConnection): Promise<TracerTokenResult[]> {
         try {
-            const tokens = await this.sqlService.executeQuery<{
-                tracer_id: string;
-                publication_name: string;
-                publisher_commit: Date;
-                distributor_commit: Date;
-                subscriber_commit: Date;
+            const publications = await this.sqlService.executeQuery<{
+                publisher: string;
+                publisher_db: string;
+                publication: string;
+                publication_id: number;
             }>(connection, `
-                USE distribution;
-                SELECT 
-                    t.tracer_id,
-                    p.publication_name,
-                    t.publisher_commit,
-                    t.distributor_commit,
-                    t.subscriber_commit
-                FROM MSpublications p
-                JOIN MStracer_tokens t ON p.publication_id = t.publication_id
-                WHERE t.publisher_commit > DATEADD(hour, -1, GETDATE())
+                USE distribution
+                EXEC sp_replmonitorhelppublication
             `);
 
-            return tokens.map(t => ({
-                id: t.tracer_id,
-                publication: t.publication_name,
-                publisherInsertTime: t.publisher_commit,
-                distributorInsertTime: t.distributor_commit,
-                subscriberInsertTime: t.subscriber_commit,
-                totalLatencySeconds: Math.round(
-                    (t.subscriber_commit?.getTime() - t.publisher_commit.getTime()) / 1000
-                )
-            }));
+            const results: TracerTokenResult[] = [];
+
+            for (const pub of publications) {
+                try {
+                    const tokens = await this.sqlService.executeQuery<{
+                        tracer_id: string;
+                        publisher_commit: Date;
+                        distributor_commit: Date;
+                        subscriber_commit: Date;
+                        subscriber: string;
+                        subscriber_db: string;
+                    }>(connection, `
+                        USE distribution
+                        EXEC sp_helptracertokenhistory
+                            @publication = '${pub.publication}',
+                            @publisher = '${pub.publisher}',
+                            @publisher_db = '${pub.publisher_db}'
+                    `);
+
+                    results.push(...tokens.map(t => ({
+                        id: t.tracer_id,
+                        publication: pub.publication,
+                        publisherInsertTime: t.publisher_commit,
+                        distributorInsertTime: t.distributor_commit,
+                        subscriberInsertTime: t.subscriber_commit,
+                        totalLatencySeconds: Math.round(
+                            (t.subscriber_commit?.getTime() - t.publisher_commit.getTime()) / 1000
+                        )
+                    })));
+                } catch (error) {
+                    console.error(`Failed to get tracer tokens for publication ${pub.publication}:`, error);
+                }
+            }
+
+            return results;
         } catch (error) {
             console.error('Failed to get tracer token results:', error);
             return [];
@@ -319,70 +384,35 @@ export class MonitoringService {
      */
     private async getLatencyMetrics(connection: SqlServerConnection): Promise<ReplicationLatency[]> {
         try {
-            const metrics = await this.sqlService.executeQuery<{
+            const subscriptions = await this.sqlService.executeQuery<{
                 publication: string;
+                publisher_db: string;
                 subscriber: string;
                 subscriber_db: string;
+                subscription_type: number;
                 latency: number;
-                pending_commands: number;
-                estimated_completion: number;
-                delivery_rate: number;
+                last_distsync: Date;
+                status: number;
+                commands_in_distrib: number;
+                estimated_time_to_completion: number;
             }>(connection, `
-                USE distribution;
-                SELECT 
-                    p.publication_name as publication,
-                    s.subscriber_server as subscriber,
-                    s.subscriber_db,
-                    DATEDIFF(second, MIN(entry_time), GETDATE()) as latency,
-                    COUNT(*) as pending_commands,
-                    CASE 
-                        WHEN COUNT(*) > 0 AND AVG(DATEDIFF(second, entry_time, GETDATE())) > 0 
-                        THEN COUNT(*) * AVG(DATEDIFF(second, entry_time, GETDATE())) / 60.0 
-                        ELSE 0 
-                    END as estimated_completion,
-                    AVG(ds.delivery_rate) as delivery_rate
-                FROM MSdistribution_history h
-                JOIN MSdistribution_agents a ON h.agent_id = a.id
-                JOIN MSpublications p ON a.publication_id = p.publication_id
-                JOIN MSsubscriptions s ON a.subscription_id = s.subscription_id
-                LEFT JOIN MSdistribution_status ds ON p.publication_id = ds.publication_id
-                WHERE h.delivered_transactions = 0
-                GROUP BY p.publication_name, s.subscriber_server, s.subscriber_db
+                EXEC distribution.dbo.sp_replmonitorhelpsubscription
+                @publisher = @@SERVERNAME,
+                @publication_type = 0,
+                @mode = 0
             `);
 
-            const result: ReplicationLatency[] = [];
-
-            for (const metric of metrics) {
-                const key = `${metric.publication}-${metric.subscriber}-${metric.subscriber_db}`;
-                let history = this.latencyHistory.get(key) || [];
-                
-                // Add new data point
-                history.push({
-                    timestamp: new Date(),
-                    latencySeconds: metric.latency
-                });
-
-                // Trim history to retain only the configured number of points
-                if (history.length > this.config.historyRetentionCount) {
-                    history = history.slice(-this.config.historyRetentionCount);
-                }
-
-                this.latencyHistory.set(key, history);
-
-                result.push({
-                    publication: metric.publication,
-                    subscriber: metric.subscriber,
-                    subscriberDb: metric.subscriber_db,
-                    latencySeconds: metric.latency,
-                    pendingCommandCount: metric.pending_commands,
-                    estimatedTimeToCompletionSeconds: metric.estimated_completion,
-                    collectionTime: new Date(),
-                    latencyHistory: [...history],
-                    deliveryRate: metric.delivery_rate
-                });
-            }
-
-            return result;
+            return subscriptions.map(sub => ({
+                publication: sub.publication,
+                subscriber: sub.subscriber,
+                subscriberDb: sub.subscriber_db,
+                latencySeconds: sub.latency,
+                pendingCommandCount: sub.commands_in_distrib,
+                estimatedTimeToCompletionSeconds: sub.estimated_time_to_completion,
+                collectionTime: new Date(),
+                latencyHistory: this.latencyHistory.get(`${sub.publication}-${sub.subscriber}-${sub.subscriber_db}`) || [],
+                deliveryRate: 0
+            }));
         } catch (error) {
             console.error('Failed to get latency metrics:', error);
             return [];
@@ -394,7 +424,10 @@ export class MonitoringService {
      */
     private async checkHealth(): Promise<void> {
         try {
-            const connections = vscode.workspace.getConfiguration('sqlReplication').get<SqlServerConnection[]>('connections', []);
+            const connectionService = ConnectionService.getInstance();
+            const connections = connectionService.getConnections();
+            console.log(`Checking health for ${connections.length} connections`);
+            
             const health: ReplicationHealth = {
                 status: 'Healthy',
                 alerts: [],
@@ -414,16 +447,16 @@ export class MonitoringService {
             }
 
             for (const connection of connections) {
-                // Get latency metrics
-                const metrics = await this.getLatencyMetrics(connection);
-                health.latencyMetrics.push(...metrics);
-
+                console.log(`Processing connection: ${connection.serverName}`);
+                
                 // Get agent status
                 const agents = await this.getAgentStatus(connection);
+                console.log(`Found ${agents.length} agents for ${connection.serverName}`);
                 health.agents.push(...agents);
 
                 // Update agent status summary
                 for (const agent of agents) {
+                    console.log(`Agent ${agent.name}: ${agent.status}`);
                     if (agent.status === 'Running') {
                         health.agentStatus.running++;
                     } else if (agent.status === 'Failed') {
@@ -443,6 +476,11 @@ export class MonitoringService {
                         }, 'Performance', 'Consider optimizing the publication or scaling up the server resources.');
                     }
                 }
+
+                // Get latency metrics
+                const metrics = await this.getLatencyMetrics(connection);
+                console.log(`Found ${metrics.length} latency metrics for ${connection.serverName}`);
+                health.latencyMetrics.push(...metrics);
 
                 // Check metrics against thresholds
                 for (const metric of metrics) {
@@ -482,6 +520,7 @@ export class MonitoringService {
                 // Get tracer token results
                 if (this.config.enableTracerTokens) {
                     const tokens = await this.getTracerTokenResults(connection);
+                    console.log(`Found ${tokens.length} tracer tokens for ${connection.serverName}`);
                     health.tracerTokens.push(...tokens);
 
                     // Check tracer token latency
@@ -496,11 +535,21 @@ export class MonitoringService {
 
                 // Get publication statistics
                 const stats = await this.getPublicationStats(connection);
+                console.log(`Found ${stats.length} publication stats for ${connection.serverName}`);
                 health.publicationStats.push(...stats);
             }
 
             // Add current alerts to health status
             health.alerts = Array.from(this.alerts.values());
+            console.log(`Total alerts: ${health.alerts.length}`);
+            console.log('Final health status:', {
+                status: health.status,
+                agents: health.agents.length,
+                metrics: health.latencyMetrics.length,
+                tokens: health.tracerTokens.length,
+                stats: health.publicationStats.length,
+                agentStatus: health.agentStatus
+            });
 
             // Emit health update event
             this._onHealthUpdate.fire(health);
@@ -509,7 +558,7 @@ export class MonitoringService {
             health.alerts
                 .filter(alert => alert.severity === 'Critical')
                 .forEach(alert => {
-                    vscode.window.showErrorMessage(
+                    void vscode.window.showErrorMessage(
                         `${alert.message}\n${alert.recommendedAction || ''}`
                     );
                 });
@@ -563,5 +612,41 @@ export class MonitoringService {
      */
     public getConfig(): MonitoringConfig {
         return { ...this.config };
+    }
+
+    private mapStatus(status: number): AgentStatus['status'] {
+        switch (status) {
+            case 1: return 'Running';
+            case 2: return 'Stopped';
+            case 3: return 'Retrying';
+            case 4: return 'Failed';
+            case 5: return 'Completing';
+            default: return 'Failed';
+        }
+    }
+
+    private mapRunOutcome(status: number): 'Failed' | 'Succeeded' | 'Retry' | 'Cancelled' {
+        switch (status) {
+            case 1: // Running
+            case 2: // Stopped
+                return 'Succeeded';
+            case 3: // Retrying
+                return 'Retry';
+            case 4: // Failed
+                return 'Failed';
+            case 5: // Completing
+                return 'Succeeded';
+            default:
+                return 'Failed';
+        }
+    }
+
+    private mapAgentType(type: AgentType): 'Snapshot' | 'LogReader' | 'Distribution' {
+        switch (type) {
+            case AgentType.SnapshotAgent: return 'Snapshot';
+            case AgentType.LogReaderAgent: return 'LogReader';
+            case AgentType.DistributionAgent: return 'Distribution';
+            default: throw new Error(`Unknown agent type: ${type}`);
+        }
     }
 } 
