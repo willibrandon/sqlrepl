@@ -71,6 +71,16 @@ echo "✅ Build completed successfully!"
 
 # Run tests if enabled
 if [ "$RUN_TESTS" = true ]; then
+    # Start Docker if enabled
+    if [ "$USE_DOCKER" = true ]; then
+        echo "🐳 Setting up Docker containers..."
+        if ! ./scripts/setup-sqlserver.sh; then
+            echo "❌ Failed to setup Docker containers!"
+            exit 1
+        fi
+        echo "✅ Docker containers ready"
+    fi
+
     echo "🧪 Running tests..."
     
     # Run integration tests first
