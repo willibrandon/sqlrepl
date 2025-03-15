@@ -1,0 +1,78 @@
+/* Custom styles for SQL Replication Extension docs */
+
+:root {
+    --primary-color: #007acc;  /* VS Code blue */
+    --secondary-color: #0098ff;
+}
+
+/* Make headings more prominent */
+.content h1 {
+    color: var(--primary-color);
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 0.3em;
+}
+
+/* Style code blocks */
+pre {
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* Style inline code */
+code {
+    color: var(--secondary-color);
+    background: rgba(0,0,0,0.05);
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+}
+
+/* Style links */
+.content a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.content a:hover {
+    text-decoration: underline;
+}
+
+/* Style blockquotes */
+blockquote {
+    border-left: 4px solid var(--primary-color);
+    margin: 1em 0;
+    padding-left: 1em;
+    color: #666;
+}
+
+/* Style tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+}
+
+th {
+    background: var(--primary-color);
+    color: white;
+    padding: 0.5em;
+}
+
+td {
+    padding: 0.5em;
+    border: 1px solid #ddd;
+}
+
+/* Style notes and warnings */
+.warning {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 1em;
+    margin: 1em 0;
+}
+
+.note {
+    background: #d1ecf1;
+    border-left: 4px solid #17a2b8;
+    padding: 1em;
+    margin: 1em 0;
+} 
