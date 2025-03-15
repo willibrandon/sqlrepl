@@ -50,6 +50,10 @@ docker run `
     -d `
     mcr.microsoft.com/mssql/server:2022-latest
 
+Write-Host "Creating replication directory in container..."
+docker exec $CONTAINER_NAME mkdir -p /var/opt/mssql/ReplData
+docker exec $CONTAINER_NAME chown mssql /var/opt/mssql/ReplData
+
 Write-Host "Waiting for SQL Server to start..."
 Write-Host "This may take a minute or two on first run..."
 
@@ -91,14 +95,12 @@ for ($i = 1; $i -le 60; $i++) {
 
 # Create test database and enable replication
 Write-Host "Configuring SQL Server..."
-$sqlCommands = @"
+
+# First batch: Basic configuration
+$sqlCommands1 = @"
 -- Enable contained database authentication
 sp_configure 'contained database authentication', 1;
 RECONFIGURE;
-GO
-
--- Create test database
-CREATE DATABASE TestDB;
 GO
 
 -- Enable replication and agent
@@ -114,6 +116,25 @@ GO
 
 -- Start SQL Server Agent
 EXEC master.dbo.xp_servicecontrol 'START', 'SQLServerAGENT';
+GO
+"@
+
+Write-Host "Applying basic configuration..."
+$sqlCommands1 | docker exec -i $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd `
+    -S localhost,1433 `
+    -U sa `
+    -P "$SA_PASSWORD" `
+    -N `
+    -C
+
+Write-Host "Waiting for SQL Server Agent to start..."
+Start-Sleep -Seconds 5
+
+# Second batch: Create databases and users
+$sqlCommands2 = @"
+-- Create test databases
+CREATE DATABASE TestDB;
+CREATE DATABASE TestDB2;
 GO
 
 -- Drop existing login and user if they exist
@@ -133,13 +154,22 @@ CREATE LOGIN $TEST_USER WITH
     CHECK_EXPIRATION = OFF;
 GO
 
--- Create user and assign permissions
+-- Create user and assign permissions in both databases
 CREATE USER $TEST_USER FOR LOGIN $TEST_USER;
 GO
 ALTER ROLE db_owner ADD MEMBER $TEST_USER;
 GO
 
--- Create test table
+USE TestDB2;
+GO
+CREATE USER $TEST_USER FOR LOGIN $TEST_USER;
+GO
+ALTER ROLE db_owner ADD MEMBER $TEST_USER;
+GO
+
+-- Create test table in TestDB
+USE TestDB;
+GO
 CREATE TABLE TestTable (
     ID INT PRIMARY KEY IDENTITY(1,1),
     Name NVARCHAR(100),
@@ -152,15 +182,234 @@ INSERT INTO TestTable (Name) VALUES ('Test Record 1'), ('Test Record 2');
 GO
 "@
 
-$sqlCommands | docker exec -i $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd `
+Write-Host "Creating databases and users..."
+$sqlCommands2 | docker exec -i $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd `
     -S localhost,1433 `
     -U sa `
     -P "$SA_PASSWORD" `
     -N `
     -C
 
-# Verify setup
-$verifyResult = docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd `
+Write-Host "Waiting for databases to be ready..."
+Start-Sleep -Seconds 5
+
+# Third batch: Configure distributor
+$sqlCommands3 = @"
+-- Configure Distributor
+USE master;
+GO
+EXEC sp_adddistributor @distributor = @@SERVERNAME, @password = 'Password123!';
+GO
+EXEC sp_adddistributiondb @database = 'distribution';
+GO
+
+-- Create master key for distribution database
+USE distribution;
+GO
+IF NOT EXISTS (SELECT * FROM sys.symmetric_keys WHERE name = '##MS_DatabaseMasterKey##')
+BEGIN
+    CREATE MASTER KEY ENCRYPTION BY PASSWORD = 'MasterKey123!';
+END
+GO
+
+EXEC sp_adddistpublisher 
+    @publisher = @@SERVERNAME, 
+    @distribution_db = 'distribution',
+    @working_directory = N'/var/opt/mssql/ReplData',
+    @security_mode = 1;
+GO
+"@
+
+Write-Host "Configuring distributor..."
+$sqlCommands3 | docker exec -i $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd `
+    -S localhost,1433 `
+    -U sa `
+    -P "$SA_PASSWORD" `
+    -N `
+    -C
+
+Write-Host "Waiting for distributor to be ready..."
+Start-Sleep -Seconds 10
+
+# Fourth batch: Configure publications
+$sqlCommands4 = @"
+-- Enable TestDB for replication
+USE TestDB;
+GO
+EXEC sp_replicationdboption @dbname = N'TestDB', 
+    @optname = N'publish', 
+    @value = N'true';
+GO
+
+-- Create snapshot publication
+EXEC sp_addpublication 
+    @publication = N'SnapshotPub',
+    @description = N'Snapshot publication of TestTable',
+    @sync_method = N'native',
+    @retention = 0,
+    @allow_push = N'true',
+    @allow_pull = N'true',
+    @allow_anonymous = N'false',
+    @enabled_for_internet = N'false',
+    @snapshot_in_defaultfolder = N'true',
+    @compress_snapshot = N'false',
+    @repl_freq = N'snapshot',
+    @status = N'active',
+    @independent_agent = N'true';
+GO
+
+-- Add snapshot article with corrected type and schema options
+EXEC sp_addarticle 
+    @publication = N'SnapshotPub',
+    @article = N'TestTable',
+    @source_owner = N'dbo',
+    @source_object = N'TestTable',
+    @type = N'logbased',
+    @description = NULL,
+    @creation_script = NULL,
+    @pre_creation_cmd = N'drop',
+    @schema_option = 0x000000000803509D,
+    @identityrangemanagementoption = N'manual',
+    @destination_table = N'TestTable',
+    @destination_owner = N'dbo',
+    @vertical_partition = N'false'
+GO
+
+-- Create transactional publication
+EXEC sp_addpublication 
+    @publication = N'TransPub',
+    @description = N'Transactional publication of TestTable',
+    @sync_method = N'concurrent',
+    @retention = 0,
+    @allow_push = N'true',
+    @allow_pull = N'true',
+    @allow_anonymous = N'false',
+    @enabled_for_internet = N'false',
+    @snapshot_in_defaultfolder = N'true',
+    @compress_snapshot = N'false',
+    @repl_freq = N'continuous',
+    @status = N'active',
+    @independent_agent = N'true';
+GO
+
+-- Add transactional article
+EXEC sp_addarticle 
+    @publication = N'TransPub',
+    @article = N'TestTable',
+    @source_owner = N'dbo',
+    @source_object = N'TestTable',
+    @type = N'logbased',
+    @description = NULL,
+    @creation_script = NULL,
+    @pre_creation_cmd = N'drop',
+    @schema_option = 0x80030F3,
+    @identityrangemanagementoption = N'manual',
+    @destination_table = N'TestTable',
+    @destination_owner = N'dbo';
+GO
+
+-- Create snapshot agents for both publications
+EXEC sp_addpublication_snapshot 
+    @publication = N'SnapshotPub',
+    @frequency_type = 1,
+    @frequency_interval = 1,
+    @frequency_relative_interval = 1,
+    @frequency_recurrence_factor = 0,
+    @frequency_subday = 1,
+    @frequency_subday_interval = 1;
+GO
+
+EXEC sp_addpublication_snapshot 
+    @publication = N'TransPub',
+    @frequency_type = 1,
+    @frequency_interval = 1,
+    @frequency_relative_interval = 1,
+    @frequency_recurrence_factor = 0,
+    @frequency_subday = 1,
+    @frequency_subday_interval = 1;
+GO
+
+-- Create subscriptions
+-- Snapshot subscription
+EXEC sp_addsubscription 
+    @publication = N'SnapshotPub',
+    @subscriber = @@SERVERNAME,
+    @destination_db = N'TestDB2',
+    @subscription_type = N'Push',
+    @sync_type = N'automatic',
+    @article = N'all',
+    @update_mode = N'read only';
+GO
+
+EXEC sp_addpushsubscription_agent 
+    @publication = N'SnapshotPub',
+    @subscriber = @@SERVERNAME,
+    @subscriber_db = N'TestDB2',
+    @frequency_type = 1,
+    @frequency_interval = 1,
+    @frequency_relative_interval = 1,
+    @frequency_recurrence_factor = 0,
+    @frequency_subday = 1,
+    @frequency_subday_interval = 1;
+GO
+
+-- Transactional subscription
+EXEC sp_addsubscription 
+    @publication = N'TransPub',
+    @subscriber = @@SERVERNAME,
+    @destination_db = N'TestDB2',
+    @subscription_type = N'Push',
+    @sync_type = N'automatic',
+    @article = N'all',
+    @update_mode = N'read only';
+GO
+
+EXEC sp_addpushsubscription_agent 
+    @publication = N'TransPub',
+    @subscriber = @@SERVERNAME,
+    @subscriber_db = N'TestDB2',
+    @frequency_type = 1,
+    @frequency_interval = 1,
+    @frequency_relative_interval = 1,
+    @frequency_recurrence_factor = 0,
+    @frequency_subday = 1,
+    @frequency_subday_interval = 1;
+GO
+
+-- Start snapshot agents (corrected job names)
+DECLARE @snapshot_job1 nvarchar(255)
+DECLARE @snapshot_job2 nvarchar(255)
+
+SELECT @snapshot_job1 = name from msdb.dbo.sysjobs 
+WHERE name LIKE 'sqlserver-repl-TestDB-SnapshotPub%';
+
+SELECT @snapshot_job2 = name from msdb.dbo.sysjobs 
+WHERE name LIKE 'sqlserver-repl-TestDB-TransPub%';
+
+IF @snapshot_job1 IS NOT NULL
+    EXEC msdb.dbo.sp_start_job @job_name = @snapshot_job1;
+
+IF @snapshot_job2 IS NOT NULL
+    EXEC msdb.dbo.sp_start_job @job_name = @snapshot_job2;
+GO
+"@
+
+Write-Host "Configuring publications and subscriptions..."
+$sqlCommands4 | docker exec -i $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd `
+    -S localhost,1433 `
+    -U sa `
+    -P "$SA_PASSWORD" `
+    -N `
+    -C
+
+Write-Host "Waiting for replication setup to complete..."
+Start-Sleep -Seconds 10
+
+# Verify setup with multiple checks
+Write-Host "Verifying setup..."
+
+# Check TestDB
+$verifyResult1 = docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd `
     -S localhost,1433 `
     -U $TEST_USER `
     -P "$TEST_PASSWORD" `
@@ -169,7 +418,16 @@ $verifyResult = docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd `
     -d TestDB `
     -Q "SELECT COUNT(*) FROM TestTable;"
 
-if ($verifyResult -match "2") {
+# Check publications
+$verifyResult2 = docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd `
+    -S localhost,1433 `
+    -U sa `
+    -P "$SA_PASSWORD" `
+    -N `
+    -C `
+    -Q "SELECT COUNT(*) FROM distribution.dbo.MSpublications;"
+
+if ($verifyResult1 -match "2" -and $verifyResult2 -match "2") {
     Write-Host "${GREEN}SQL Server setup completed successfully!${NC}"
     Write-Host "${YELLOW}Connection Details:${NC}"
     Write-Host "Server: localhost,$HOST_PORT"
@@ -180,6 +438,8 @@ if ($verifyResult -match "2") {
     Write-Host "Server=localhost,$HOST_PORT;Database=TestDB;User Id=$TEST_USER;Password=$TEST_PASSWORD;TrustServerCertificate=True"
 } else {
     Write-Host "${RED}Setup verification failed${NC}"
+    Write-Host "TestDB verification result: $verifyResult1"
+    Write-Host "Publications verification result: $verifyResult2"
     exit 1
 }
 
