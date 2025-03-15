@@ -33,7 +33,7 @@ Managing SQL Server replication traditionally requires using SQL Server Manageme
 
 Having issues? Check out our:
 - [Troubleshooting Guide](advanced/troubleshooting.md)
-- [GitHub Issues](https://github.com/yourusername/sqlrepl/issues)
+- [GitHub Issues](https://github.com/willibrandon/sqlrepl/issues)
 
 ## Contributing
 

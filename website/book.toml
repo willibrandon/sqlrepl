@@ -6,9 +6,9 @@ multilingual = false
 src = "src"
 
 [output.html]
-git-repository-url = "https://github.com/yourusername/sqlrepl"
+git-repository-url = "https://github.com/willibrandon/sqlrepl"
 git-repository-icon = "fa-github"
-edit-url-template = "https://github.com/yourusername/sqlrepl/edit/main/website/{path}"
+edit-url-template = "https://github.com/willibrandon/sqlrepl/edit/main/website/{path}"
 site-url = "/sqlrepl/"
 cname = "sqlrepl.com"
 default-theme = "light"
