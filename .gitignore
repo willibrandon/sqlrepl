@@ -50,4 +50,12 @@ yarn-error.log*
 .env.*.local
 *.log
 junit.xml
-test-results.xml 
+test-results.xml
+
+# mdBook output
+website/book/
+
+# mdBook backups
+*.backup
+*.swp
+*~ 
