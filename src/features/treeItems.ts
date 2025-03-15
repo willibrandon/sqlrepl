@@ -18,11 +18,32 @@ export class ServerTreeItem extends vscode.TreeItem {
         /** Whether this item can be expanded */
         public readonly collapsibleState: vscode.TreeItemCollapsibleState
     ) {
-        super(connection.serverName, collapsibleState);
-        this.tooltip = `${connection.serverName}${connection.database ? ` (${connection.database})` : ''}`;
+        // Add OS indicator to the label for Linux servers
+        const displayName = connection.serverOs === 'Linux'
+            ? `${connection.serverName} [Linux]`
+            : connection.serverName;
+        
+        super(displayName, collapsibleState);
+        
+        // Add OS and version info to tooltip if available
+        const osInfo = connection.serverOs ? `\nOS: ${connection.serverOs}` : '';
+        const versionInfo = connection.serverVersion ? `\nVersion: ${connection.serverVersion}` : '';
+        this.tooltip = `${connection.serverName}${connection.database ? ` (${connection.database})` : ''}${osInfo}${versionInfo}`;
+        
+        // Show authentication type in description
         this.description = connection.authentication === 'windows' ? 'Windows Auth' : 'SQL Auth';
         this.contextValue = 'server';
-        this.iconPath = new vscode.ThemeIcon('server');
+        
+        // Choose different color and icon based on OS type
+        if (connection.serverOs === 'Linux') {
+            // Use Linux-specific icon
+            this.iconPath = new vscode.ThemeIcon('terminal-linux');
+            // Add Linux-specific color to make it stand out more
+            this.resourceUri = vscode.Uri.parse('file://linux-server');
+        } else {
+            // Default server icon for Windows or unknown OS
+            this.iconPath = new vscode.ThemeIcon('server');
+        }
     }
 }
 
@@ -78,7 +99,7 @@ export class PublicationTreeItem extends vscode.TreeItem {
         super(publication.name, collapsibleState);
         
         // Create a detailed tooltip with all available information
-        this.tooltip = [
+        const tooltipLines = [
             `Publication: ${publication.name}`,
             `Database: ${publication.database}`,
             `Type: ${publication.type}`,
@@ -91,7 +112,8 @@ export class PublicationTreeItem extends vscode.TreeItem {
             `Immediate Sync Ready: ${publication.immediate_sync_ready ? 'Yes' : 'No'}`,
             `Allow Sync Tran: ${publication.allow_sync_tran ? 'Yes' : 'No'}`,
             `Enabled For Internet: ${publication.enabled_for_internet ? 'Yes' : 'No'}`
-        ].join('\n');
+        ];
+        this.tooltip = tooltipLines.join('\n');
         
         // Create a concise but informative description
         this.description = `${publication.database} | ${publication.type} (${publication.status})`;
@@ -122,7 +144,7 @@ export class SubscriptionTreeItem extends vscode.TreeItem {
         super(displayName, collapsibleState);
 
         // Create a detailed tooltip with all available information
-        this.tooltip = [
+        const tooltipLines = [
             `Publication: ${subscription.publication}`,
             `Publisher: ${subscription.publisher || 'Unknown'}`,
             `Publisher DB: ${subscription.publisherDb || 'Unknown'}`,
@@ -130,7 +152,8 @@ export class SubscriptionTreeItem extends vscode.TreeItem {
             `Type: ${subscription.subscription_type || 'Unknown'}`,
             `Sync Type: ${subscription.sync_type || 'Unknown'}`,
             `Status: ${subscription.status || 'Unknown'}`
-        ].join('\n');
+        ];
+        this.tooltip = tooltipLines.join('\n');
 
         // Create a concise but informative description
         const publisher = subscription.publisher || 'Unknown';
@@ -172,7 +195,7 @@ export class AgentTreeItem extends vscode.TreeItem {
         const statusText = agent.isRunning ? 'Running' : agent.enabled ? 'Idle' : 'Disabled';
         
         // Create a detailed tooltip with all available information
-        this.tooltip = [
+        const tooltipLines = [
             `Agent: ${agent.name}`,
             `Type: ${agent.type}`,
             `Status: ${statusText}`,
@@ -182,11 +205,20 @@ export class AgentTreeItem extends vscode.TreeItem {
             `Next Run: ${agent.nextRunTime ? agent.nextRunTime.toLocaleString() : 'Not Scheduled'}`,
             `Publisher: ${agent.publisher || 'Unknown'}`,
             `Publisher DB: ${agent.publisherDb || 'Unknown'}`,
-            `Publication: ${agent.publication || 'Unknown'}`,
-            agent.subscriber ? `Subscriber: ${agent.subscriber}` : '',
-            agent.subscriberDb ? `Subscriber DB: ${agent.subscriberDb}` : '',
-            `Description: ${agent.description}`
-        ].filter(Boolean).join('\n');
+            `Publication: ${agent.publication || 'Unknown'}`
+        ];
+        
+        if (agent.subscriber) {
+            tooltipLines.push(`Subscriber: ${agent.subscriber}`);
+        }
+        
+        if (agent.subscriberDb) {
+            tooltipLines.push(`Subscriber DB: ${agent.subscriberDb}`);
+        }
+        
+        tooltipLines.push(`Description: ${agent.description}`);
+        
+        this.tooltip = tooltipLines.join('\n');
         
         // Create a concise description with status and last run info
         const lastRun = agent.lastRunTime 

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionService, SqlServerConnection } from '../services/connectionService';
 import { v4 as uuidv4 } from 'uuid';
+import { SqlService } from '../services/sqlService';
 
 /**
  * Manages VS Code commands related to SQL Server connections.
@@ -106,7 +107,8 @@ export class ConnectionCommands {
             };
 
             // Store connection
-            ConnectionService.getInstance(this.context).addConnection(connection);
+            const connectionService = ConnectionService.getInstance(this.context);
+            const newConnection = connectionService.addConnection(connection);
 
             // Show success message
             vscode.window.showInformationMessage(`Successfully added connection to ${serverName}`);
@@ -114,7 +116,12 @@ export class ConnectionCommands {
             // Refresh the tree view
             await vscode.commands.executeCommand('sqlrepl.refreshTree');
 
-            // TODO: Validate connection (will be implemented when we add SQL client)
+            // Test the connection and detect OS type
+            const sqlService = SqlService.getInstance();
+            await sqlService.testConnection(newConnection);
+            
+            // Refresh the tree view again to show the OS-specific icon
+            await vscode.commands.executeCommand('sqlrepl.refreshTree');
 
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to add connection: ${error instanceof Error ? error.message : 'Unknown error'}`);

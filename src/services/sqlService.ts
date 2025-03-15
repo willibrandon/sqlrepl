@@ -1,5 +1,7 @@
 import * as sql from 'mssql';
 import { SqlServerConnection } from './connectionService';
+import { ConnectionService } from './connectionService';
+import * as vscode from 'vscode';
 
 /**
  * Type for stored procedure parameters that can handle all SQL Server data types.
@@ -234,6 +236,7 @@ export class SqlService {
 
     /**
      * Tests if a connection can be established.
+     * Also detects and stores server OS information.
      * 
      * @param connection - Connection details to test
      * @returns True if connection succeeds
@@ -241,8 +244,60 @@ export class SqlService {
     public async testConnection(connection: SqlServerConnection): Promise<boolean> {
         try {
             const pool = await this.getPool(connection);
-            const result = await pool.request().query('SELECT @@VERSION as version');
-            return result.recordset.length > 0;
+            const result = await pool.request().query(`SELECT @@VERSION as version`);
+            
+            if (result.recordset.length > 0) {
+                const versionString = result.recordset[0].version;
+                console.log(`Version string for ${connection.serverName}:`, versionString);
+                
+                // Store version information
+                connection.serverVersion = versionString.split('\n')[0].trim();
+                
+                // Detect OS type from version string
+                let osType: 'Windows' | 'Linux' = 'Windows'; // Default to Windows
+                
+                if (versionString.includes('Linux') || 
+                    versionString.includes('Ubuntu') || 
+                    versionString.includes('Red Hat') || 
+                    versionString.includes('RHEL') || 
+                    versionString.includes('CentOS')) {
+                    osType = 'Linux';
+                    console.log(`Linux detected in version string: "${versionString}"`);
+                    
+                    // Show notification to confirm Linux detection
+                    vscode.window.showInformationMessage(`Linux SQL Server detected: ${connection.serverName}`);
+                } else {
+                    console.log(`No Linux indicators found in version string: "${versionString}"`);
+                    vscode.window.showInformationMessage(`Windows SQL Server detected: ${connection.serverName}`);
+                }
+                
+                // Store OS information in the connection object
+                connection.serverOs = osType;
+                console.log(`Detected OS for ${connection.serverName}: ${connection.serverOs}`);
+                console.log(`Detected Version for ${connection.serverName}: ${connection.serverVersion}`);
+                
+                // Debug connection object
+                console.log('Updated connection object:', {
+                    id: connection.id,
+                    serverName: connection.serverName,
+                    serverOs: connection.serverOs,
+                    serverVersion: connection.serverVersion
+                });
+                
+                // Update connection in the ConnectionService to persist OS info
+                const connectionService = ConnectionService.getInstance();
+                const updateResult = connectionService.updateConnection(connection.id, { 
+                    serverOs: connection.serverOs,
+                    serverVersion: connection.serverVersion
+                });
+                console.log(`Connection update result: ${updateResult ? 'success' : 'failed'}`);
+                
+                // Force refresh the tree view to show the updated icon
+                await vscode.commands.executeCommand('sqlrepl.refreshTree');
+                
+                return true;
+            }
+            return false;
         } catch (error) {
             console.error(`Connection test failed for ${connection.serverName}:`, error);
             return false;

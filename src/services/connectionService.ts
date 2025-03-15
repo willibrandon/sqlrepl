@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { v4 as uuidv4 } from 'uuid';
+import { SqlService } from './sqlService';
 
 /**
  * Represents a connection to a SQL Server instance.
@@ -23,6 +24,12 @@ export interface SqlServerConnection {
 
     /** SQL Server login password (required for SQL authentication) */
     password?: string;
+    
+    /** Operating system of the SQL Server instance (Windows or Linux) */
+    serverOs?: 'Windows' | 'Linux';
+    
+    /** SQL Server version information */
+    serverVersion?: string;
 }
 
 /**
@@ -66,8 +73,8 @@ export class ConnectionService {
     /**
      * Saves current connections to VSCode global state.
      */
-    private saveConnections(): void {
-        this.context.globalState.update('sqlConnections', this.connections);
+    private saveConnections(connections: SqlServerConnection[]): void {
+        this.context.globalState.update('sqlConnections', connections);
     }
 
     /**
@@ -92,6 +99,7 @@ export class ConnectionService {
     /**
      * Adds a new connection to the saved connections.
      * Automatically generates a unique ID for the connection.
+     * Also tests the connection and detects OS type.
      * 
      * @param connection - Connection details without ID
      * @returns The newly created connection with generated ID
@@ -101,8 +109,25 @@ export class ConnectionService {
             ...connection,
             id: uuidv4()
         };
+        
         this.connections.push(newConnection);
-        this.saveConnections();
+        this.saveConnections(this.connections);
+        
+        // Test connection and detect OS type
+        console.log('Testing connection to detect OS type...');
+        const sqlService = SqlService.getInstance();
+        sqlService.testConnection(newConnection)
+            .then(success => {
+                if (success) {
+                    console.log(`Successfully detected OS type for ${newConnection.serverName}: ${newConnection.serverOs || 'Unknown'}`);
+                } else {
+                    console.log(`Failed to detect OS type for ${newConnection.serverName}`);
+                }
+            })
+            .catch(error => {
+                console.error(`Error detecting OS type for ${newConnection.serverName}:`, error);
+            });
+        
         return newConnection;
     }
 
@@ -113,28 +138,31 @@ export class ConnectionService {
      */
     public removeConnection(id: string): void {
         this.connections = this.connections.filter(conn => conn.id !== id);
-        this.saveConnections();
+        this.saveConnections(this.connections);
     }
 
     /**
-     * Updates an existing connection with new properties.
-     * 
-     * @param id - ID of the connection to update
-     * @param connection - Partial connection object with properties to update
-     * @returns The updated connection
-     * @throws Error if connection with ID is not found
+     * Updates properties of an existing connection
+     * @param id The ID of the connection to update
+     * @param updates The properties to update
+     * @returns True if the connection was updated successfully
      */
-    public updateConnection(id: string, connection: Partial<SqlServerConnection>): SqlServerConnection {
-        const index = this.connections.findIndex(conn => conn.id === id);
+    public updateConnection(id: string, updates: Partial<SqlServerConnection>): boolean {
+        const connections = this.getConnections();
+        const index = connections.findIndex(conn => conn.id === id);
+        
         if (index === -1) {
-            throw new Error(`Connection with id ${id} not found`);
+            return false;
         }
-
-        this.connections[index] = {
-            ...this.connections[index],
-            ...connection
+        
+        // Update the connection with the provided properties
+        connections[index] = {
+            ...connections[index],
+            ...updates
         };
-        this.saveConnections();
-        return this.connections[index];
+        
+        // Save the updated connections
+        this.saveConnections(connections);
+        return true;
     }
 } 
