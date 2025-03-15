@@ -96,6 +96,10 @@ export interface TracerTokenResult {
     subscriberInsertTime?: Date;
     /** Total latency in seconds */
     totalLatencySeconds: number;
+    /** Subscriber name */
+    subscriber?: string;
+    /** Subscriber database name */
+    subscriberDb?: string;
 }
 
 /**

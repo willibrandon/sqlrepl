@@ -121,109 +121,121 @@ export class MonitoringService {
         try {
             const agents: AgentStatus[] = [];
 
-            // Get publisher information
+            // Get publisher information using supported stored procedure
             const publishers = await this.sqlService.executeQuery<{
                 publisher: string;
                 publisher_db: string;
             }>(connection, `
-                USE distribution
-                EXEC sp_replmonitorhelppublisher
+                EXEC distribution.dbo.sp_replmonitorhelppublisher
             `);
 
             // Process each publisher
             for (const pub of publishers) {
-                // Get snapshot agent status
-                const snapshotAgents = await this.sqlService.executeProcedure<{
+                // Get publication info including agent status
+                const publications = await this.sqlService.executeQuery<{
+                    publication: string;
                     agent_name: string;
+                    status: number;
+                    warning: number;
+                    subscriber: string;
+                    subscriber_db: string;
+                    publisher_db: string;
+                    last_distsync: Date;
+                    distribution_agent_job_id: string;
+                    mergeagent_jobid: string;
+                    last_agent_message: string;
+                }>(connection, `
+                    EXEC distribution.dbo.sp_replmonitorhelppublication 
+                    @publisher = '${pub.publisher}',
+                    @publisher_db = '${pub.publisher_db}'
+                `);
+
+                // Get distribution agent information
+                const distAgents = await this.sqlService.executeQuery<{
+                    agent_id: number;
+                    name: string;
+                    publication: string;
+                    publisher_db: string;
+                    job_id: string;
+                    profile_id: number;
                     status: number;
                     start_time: Date;
                     duration: number;
                     last_message: string;
                     delivery_rate: number;
                     delivery_latency: number;
-                }>(connection, 'distribution.dbo.sp_replmonitorhelpsnapshotagent', {
-                    publisher: pub.publisher,
-                    publisher_db: pub.publisher_db
-                });
+                    delivered_transactions: number;
+                    delivered_commands: number;
+                }>(connection, `
+                    EXEC distribution.dbo.sp_replmonitorhelpsubscription
+                    @publisher = '${pub.publisher}',
+                    @publisher_db = '${pub.publisher_db}',
+                    @publication_type = 0,
+                    @mode = 0
+                `);
 
-                // Get log reader agent status
-                const logReaderAgents = await this.sqlService.executeProcedure<{
-                    agent_name: string;
-                    status: number;
-                    start_time: Date;
-                    duration: number;
-                    last_message: string;
-                    delivery_rate: number;
-                    delivery_latency: number;
-                }>(connection, 'distribution.dbo.sp_replmonitorhelplogreader', {
-                    publisher: pub.publisher,
-                    publisher_db: pub.publisher_db
-                });
+                // Create agent entries for each publication
+                for (const pubInfo of publications) {
+                    // Create snapshot agent status
+                    const snapshotAgentName = `${pubInfo.publisher_db} ${pubInfo.publication} Snapshot`;
+                    agents.push({
+                        name: snapshotAgentName,
+                        type: this.mapAgentType(AgentType.SnapshotAgent),
+                        status: this.mapStatus(pubInfo.status),
+                        lastStartTime: undefined,
+                        lastRunDuration: 0,
+                        lastRunOutcome: this.mapRunOutcome(pubInfo.status),
+                        errorMessage: pubInfo.last_agent_message || '',
+                        performance: {
+                            commandsPerSecond: 0,
+                            averageLatency: 0,
+                            memoryUsageMB: 0,
+                            cpuUsagePercent: 0
+                        }
+                    });
 
-                // Get distribution agent status
-                const distributionAgents = await this.sqlService.executeProcedure<{
-                    agent_name: string;
-                    status: number;
-                    start_time: Date;
-                    duration: number;
-                    last_message: string;
-                    delivery_rate: number;
-                    delivery_latency: number;
-                }>(connection, 'distribution.dbo.sp_replmonitorhelpdistributor', {
-                    publisher: pub.publisher,
-                    publisher_db: pub.publisher_db
-                });
+                    // Create log reader agent status
+                    const logReaderAgentName = `${pubInfo.publisher_db} Log Reader`;
+                    agents.push({
+                        name: logReaderAgentName,
+                        type: this.mapAgentType(AgentType.LogReaderAgent),
+                        status: this.mapStatus(pubInfo.status),
+                        lastStartTime: undefined,
+                        lastRunDuration: 0,
+                        lastRunOutcome: this.mapRunOutcome(pubInfo.status),
+                        errorMessage: pubInfo.last_agent_message || '',
+                        performance: {
+                            commandsPerSecond: 0,
+                            averageLatency: 0,
+                            memoryUsageMB: 0,
+                            cpuUsagePercent: 0
+                        }
+                    });
+                }
 
-                // Process snapshot agents
-                agents.push(...snapshotAgents.map(agent => ({
-                    name: agent.agent_name,
-                    type: this.mapAgentType(AgentType.SnapshotAgent),
-                    status: this.mapStatus(agent.status),
-                    lastStartTime: agent.start_time,
-                    lastRunDuration: agent.duration,
-                    lastRunOutcome: this.mapRunOutcome(agent.status),
-                    errorMessage: agent.last_message,
-                    performance: {
-                        commandsPerSecond: agent.delivery_rate || 0,
-                        averageLatency: agent.delivery_latency || 0,
-                        memoryUsageMB: 0,
-                        cpuUsagePercent: 0
-                    }
-                })));
+                // Add distribution agents
+                for (const agent of distAgents) {
+                    agents.push({
+                        name: agent.name,
+                        type: this.mapAgentType(AgentType.DistributionAgent),
+                        status: this.mapStatus(agent.status),
+                        lastStartTime: agent.start_time,
+                        lastRunDuration: agent.duration,
+                        lastRunOutcome: this.mapRunOutcome(agent.status),
+                        errorMessage: agent.last_message || '',
+                        performance: {
+                            commandsPerSecond: agent.delivery_rate || 0,
+                            averageLatency: agent.delivery_latency || 0,
+                            memoryUsageMB: 0,
+                            cpuUsagePercent: 0
+                        }
+                    });
+                }
 
-                // Process log reader agents
-                agents.push(...logReaderAgents.map(agent => ({
-                    name: agent.agent_name,
-                    type: this.mapAgentType(AgentType.LogReaderAgent),
-                    status: this.mapStatus(agent.status),
-                    lastStartTime: agent.start_time,
-                    lastRunDuration: agent.duration,
-                    lastRunOutcome: this.mapRunOutcome(agent.status),
-                    errorMessage: agent.last_message,
-                    performance: {
-                        commandsPerSecond: agent.delivery_rate || 0,
-                        averageLatency: agent.delivery_latency || 0,
-                        memoryUsageMB: 0,
-                        cpuUsagePercent: 0
-                    }
-                })));
-
-                // Process distribution agents
-                agents.push(...distributionAgents.map(agent => ({
-                    name: agent.agent_name,
-                    type: this.mapAgentType(AgentType.DistributionAgent),
-                    status: this.mapStatus(agent.status),
-                    lastStartTime: agent.start_time,
-                    lastRunDuration: agent.duration,
-                    lastRunOutcome: this.mapRunOutcome(agent.status),
-                    errorMessage: agent.last_message,
-                    performance: {
-                        commandsPerSecond: agent.delivery_rate || 0,
-                        averageLatency: agent.delivery_latency || 0,
-                        memoryUsageMB: 0,
-                        cpuUsagePercent: 0
-                    }
-                })));
+                // Run replication_agent_checkup to get additional agent info
+                await this.sqlService.executeQuery(connection, `
+                    EXEC sp_replication_agent_checkup
+                `);
             }
 
             return agents;
@@ -253,20 +265,32 @@ export class MonitoringService {
 
             return await Promise.all(publications.map(async pub => {
                 try {
+                    // Get subscription count using the correct column names
                     const subCount = await this.sqlService.executeQuery<{ count: number }>(connection, `
                         USE distribution
                         SELECT COUNT(*) as count
                         FROM dbo.MSsubscriptions s
                         WHERE publisher_db = '${pub.publisher_db}'
-                        AND publication = '${pub.publication}'
+                        AND publication_id IN (
+                            SELECT publication_id 
+                            FROM dbo.MSpublications 
+                            WHERE publisher_db = '${pub.publisher_db}'
+                            AND publication = '${pub.publication}'
+                        )
                     `);
 
+                    // Get article count using the correct column names
                     const artCount = await this.sqlService.executeQuery<{ count: number }>(connection, `
                         USE distribution
                         SELECT COUNT(*) as count
                         FROM dbo.MSarticles a
                         WHERE publisher_db = '${pub.publisher_db}'
-                        AND publication = '${pub.publication}'
+                        AND publication_id IN (
+                            SELECT publication_id 
+                            FROM dbo.MSpublications 
+                            WHERE publisher_db = '${pub.publisher_db}'
+                            AND publication = '${pub.publication}'
+                        )
                     `);
 
                     return {
@@ -334,39 +358,60 @@ export class MonitoringService {
                 publication: string;
                 publication_id: number;
             }>(connection, `
-                USE distribution
-                EXEC sp_replmonitorhelppublication
+                EXEC distribution.dbo.sp_replmonitorhelppublication
             `);
 
             const results: TracerTokenResult[] = [];
 
             for (const pub of publications) {
                 try {
-                    const tokens = await this.sqlService.executeQuery<{
-                        tracer_id: string;
+                    // First set the database context to the publication database
+                    await this.sqlService.executeQuery(connection, `USE ${pub.publisher_db}`);
+                    
+                    // Get the list of tracer tokens for this publication
+                    // When running in the publisher database context, neither @publisher nor @publisher_db should be specified
+                    const tracerTokens = await this.sqlService.executeQuery<{
+                        tracer_id: number;
                         publisher_commit: Date;
-                        distributor_commit: Date;
-                        subscriber_commit: Date;
-                        subscriber: string;
-                        subscriber_db: string;
                     }>(connection, `
-                        USE distribution
-                        EXEC sp_helptracertokenhistory
-                            @publication = '${pub.publication}',
-                            @publisher = '${pub.publisher}',
-                            @publisher_db = '${pub.publisher_db}'
+                        EXEC sp_helptracertokens 
+                        @publication = '${pub.publication}'
                     `);
-
-                    results.push(...tokens.map(t => ({
-                        id: t.tracer_id,
-                        publication: pub.publication,
-                        publisherInsertTime: t.publisher_commit,
-                        distributorInsertTime: t.distributor_commit,
-                        subscriberInsertTime: t.subscriber_commit,
-                        totalLatencySeconds: Math.round(
-                            (t.subscriber_commit?.getTime() - t.publisher_commit.getTime()) / 1000
-                        )
-                    })));
+                    
+                    // Get the latest 5 tokens only (to avoid excessive processing)
+                    const recentTokens = tracerTokens
+                        .sort((a, b) => b.publisher_commit.getTime() - a.publisher_commit.getTime())
+                        .slice(0, 5);
+                    
+                    // Process each token to get its latency info
+                    for (const token of recentTokens) {
+                        // When running in the publisher database context, neither @publisher nor @publisher_db should be specified
+                        const tokenHistory = await this.sqlService.executeQuery<{
+                            distributor_latency: number;
+                            subscriber: string;
+                            subscriber_db: string;
+                            subscriber_latency: number;
+                            overall_latency: number;
+                        }>(connection, `
+                            EXEC sp_helptracertokenhistory
+                            @publication = '${pub.publication}',
+                            @tracer_id = ${token.tracer_id}
+                        `);
+                        
+                        // Map the results to our data model
+                        for (const history of tokenHistory) {
+                            results.push({
+                                id: token.tracer_id.toString(),
+                                publication: pub.publication,
+                                publisherInsertTime: token.publisher_commit,
+                                distributorInsertTime: new Date(token.publisher_commit.getTime() + (history.distributor_latency * 1000)),
+                                subscriberInsertTime: new Date(token.publisher_commit.getTime() + (history.overall_latency * 1000)),
+                                totalLatencySeconds: history.overall_latency,
+                                subscriber: history.subscriber,
+                                subscriberDb: history.subscriber_db
+                            });
+                        }
+                    }
                 } catch (error) {
                     console.error(`Failed to get tracer tokens for publication ${pub.publication}:`, error);
                 }
