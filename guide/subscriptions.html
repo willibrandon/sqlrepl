@@ -127,10 +127,10 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/yourusername/sqlrepl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/willibrandon/sqlrepl" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/yourusername/sqlrepl/edit/main/website/src/guide/subscriptions.md" title="Suggest an edit" aria-label="Suggest an edit">
+                        <a href="https://github.com/willibrandon/sqlrepl/edit/main/website/src/guide/subscriptions.md" title="Suggest an edit" aria-label="Suggest an edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -160,6 +160,165 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="managing-subscriptions"><a class="header" href="#managing-subscriptions">Managing Subscriptions</a></h1>
+<p>This guide explains how to create and manage subscriptions to SQL Server replication publications using the SQL Replication Extension.</p>
+<h2 id="understanding-subscriptions"><a class="header" href="#understanding-subscriptions">Understanding Subscriptions</a></h2>
+<p>A subscription defines how a database receives replicated data from a publication. The SQL Replication Extension supports two types of subscriptions:</p>
+<ul>
+<li><strong>Push Subscriptions</strong>: The distributor pushes changes to subscribers</li>
+<li><strong>Pull Subscriptions</strong>: Subscribers request changes from the distributor</li>
+</ul>
+<h2 id="creating-a-subscription"><a class="header" href="#creating-a-subscription">Creating a Subscription</a></h2>
+<ol>
+<li>
+<p><strong>Access the Subscriptions View</strong></p>
+<ul>
+<li>Expand your server in the SQL Replication view</li>
+<li>Either:
+<ul>
+<li>Right-click a publication to subscribe to it</li>
+<li>Right-click the "Subscriptions" folder to browse available publications</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Choose Subscription Type</strong>
+Select either:</p>
+<ul>
+<li><strong>Push</strong>: Better for immediate synchronization, managed at publisher</li>
+<li><strong>Pull</strong>: Better for occasional synchronization, managed at subscriber</li>
+</ul>
+</li>
+<li>
+<p><strong>Configure Database</strong></p>
+<ul>
+<li>Select or create the subscriber database</li>
+<li>The database name can be different from the publisher</li>
+</ul>
+</li>
+<li>
+<p><strong>Set Synchronization Options</strong>
+Choose when to initialize the subscription:</p>
+<ul>
+<li><strong>Immediate</strong>: Start synchronization right away</li>
+<li><strong>Automatic</strong>: Wait for next snapshot</li>
+<li><strong>Manual</strong>: Initialize later manually</li>
+</ul>
+</li>
+<li>
+<p><strong>Configure Security</strong></p>
+<ul>
+<li>Choose authentication mode for remote connections</li>
+<li>Set up service account permissions if needed</li>
+</ul>
+</li>
+</ol>
+<h2 id="managing-existing-subscriptions"><a class="header" href="#managing-existing-subscriptions">Managing Existing Subscriptions</a></h2>
+<h3 id="viewing-subscriptions"><a class="header" href="#viewing-subscriptions">Viewing Subscriptions</a></h3>
+<ul>
+<li>Expand your server in the SQL Replication view</li>
+<li>Open the "Subscriptions" folder</li>
+<li>Click a subscription to view its properties</li>
+</ul>
+<h3 id="common-tasks"><a class="header" href="#common-tasks">Common Tasks</a></h3>
+<ol>
+<li>
+<p><strong>Reinitialize Subscription</strong></p>
+<ul>
+<li>Right-click the subscription</li>
+<li>Select "Reinitialize"</li>
+<li>Choose synchronization options</li>
+<li>Monitor initialization progress</li>
+</ul>
+</li>
+<li>
+<p><strong>Monitor Status</strong></p>
+<ul>
+<li>Check status indicators</li>
+<li>View agent job history</li>
+<li>Monitor synchronization progress</li>
+</ul>
+</li>
+<li>
+<p><strong>Drop Subscription</strong></p>
+<ul>
+<li>Right-click the subscription</li>
+<li>Select "Drop Subscription"</li>
+<li>Confirm the removal</li>
+</ul>
+</li>
+</ol>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<ol>
+<li>
+<p><strong>Subscription Planning</strong></p>
+<ul>
+<li>Choose appropriate subscription type based on needs</li>
+<li>Consider network bandwidth and latency</li>
+<li>Plan for initialization time with large databases</li>
+</ul>
+</li>
+<li>
+<p><strong>Performance Optimization</strong></p>
+<ul>
+<li>Monitor agent job performance</li>
+<li>Schedule initializations during off-peak hours</li>
+<li>Configure appropriate retry intervals</li>
+</ul>
+</li>
+<li>
+<p><strong>Security Considerations</strong></p>
+<ul>
+<li>Use Windows Authentication when possible</li>
+<li>Create dedicated service accounts</li>
+<li>Regularly review permissions</li>
+</ul>
+</li>
+<li>
+<p><strong>Maintenance Tasks</strong></p>
+<ul>
+<li>Monitor subscription status</li>
+<li>Check for synchronization delays</li>
+<li>Validate data consistency periodically</li>
+</ul>
+</li>
+</ol>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<h3 id="common-issues"><a class="header" href="#common-issues">Common Issues</a></h3>
+<ol>
+<li>
+<p><strong>Initialization Failures</strong></p>
+<ul>
+<li>Verify network connectivity</li>
+<li>Check permissions on both sides</li>
+<li>Review snapshot availability</li>
+</ul>
+</li>
+<li>
+<p><strong>Synchronization Delays</strong></p>
+<ul>
+<li>Monitor distribution agent</li>
+<li>Check for blocking processes</li>
+<li>Verify agent job status</li>
+</ul>
+</li>
+<li>
+<p><strong>Security Errors</strong></p>
+<ul>
+<li>Verify service account permissions</li>
+<li>Check network security settings</li>
+<li>Review firewall configurations</li>
+</ul>
+</li>
+</ol>
+<h3 id="getting-help"><a class="header" href="#getting-help">Getting Help</a></h3>
+<p>If you encounter issues:</p>
+<ol>
+<li>Check the Output panel for error messages</li>
+<li>Review agent job history</li>
+<li>See our <a href="../advanced/troubleshooting.html">troubleshooting guide</a></li>
+<li>File issues on <a href="https://github.com/willibrandon/sqlrepl/issues">GitHub</a></li>
+</ol>
 
                     </main>
 

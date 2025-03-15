@@ -127,10 +127,10 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/yourusername/sqlrepl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/willibrandon/sqlrepl" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/yourusername/sqlrepl/edit/main/website/src/guide/getting-started.md" title="Suggest an edit" aria-label="Suggest an edit">
+                        <a href="https://github.com/willibrandon/sqlrepl/edit/main/website/src/guide/getting-started.md" title="Suggest an edit" aria-label="Suggest an edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -160,6 +160,71 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
+<p>This guide will help you get up and running with the SQL Replication Extension for VS Code.</p>
+<h2 id="installation"><a class="header" href="#installation">Installation</a></h2>
+<ol>
+<li>Open VS Code</li>
+<li>Press <code>Ctrl+P</code> (Windows/Linux) or <code>Cmd+P</code> (macOS)</li>
+<li>Type <code>ext install sqlrepl</code></li>
+<li>Click "Install"</li>
+</ol>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<p>Before using the extension, ensure you have:</p>
+<ul>
+<li>SQL Server 2016 or higher installed</li>
+<li>Appropriate permissions to configure replication</li>
+<li>SQL Server Agent running on your instance</li>
+</ul>
+<h2 id="first-steps"><a class="header" href="#first-steps">First Steps</a></h2>
+<ol>
+<li>
+<p><strong>Open the SQL Replication View</strong></p>
+<ul>
+<li>Click the SQL Replication icon in the Activity Bar</li>
+<li>Or use the command palette (<code>Ctrl+Shift+P</code>) and type "SQL Replication: Show Explorer"</li>
+</ul>
+</li>
+<li>
+<p><strong>Add a Connection</strong></p>
+<ul>
+<li>Click the "+" button in the SQL Replication view</li>
+<li>Enter your server details:
+<pre><code>Server: your-server-name
+Authentication: SQL Server or Windows
+Username: your-username (if using SQL Server auth)
+Password: your-password (if using SQL Server auth)
+</code></pre>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Configure Distributor</strong></p>
+<ul>
+<li>Right-click your server in the tree view</li>
+<li>Select "Configure Distribution"</li>
+<li>Follow the wizard to set up distribution</li>
+</ul>
+</li>
+</ol>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<ul>
+<li>Learn how to <a href="publications.html">create publications</a></li>
+<li>Set up <a href="subscriptions.html">subscriptions</a></li>
+<li>Monitor your <a href="monitoring.html">replication status</a></li>
+</ul>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<p>If you encounter any issues:</p>
+<ol>
+<li>Check the Output panel (<code>Ctrl+Shift+U</code>) and select "SQL Replication" from the dropdown</li>
+<li>Verify SQL Server Agent is running</li>
+<li>Ensure you have appropriate permissions</li>
+<li>See our <a href="../advanced/troubleshooting.html">troubleshooting guide</a> for more help</li>
+</ol>
+<h2 id="need-help"><a class="header" href="#need-help">Need Help?</a></h2>
+<ul>
+<li>Check our <a href="https://willibrandon.github.io/sqlrepl">documentation</a></li>
+<li>File issues on <a href="https://github.com/willibrandon/sqlrepl/issues">GitHub</a></li>
+</ul>
 
                     </main>
 

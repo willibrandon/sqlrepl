@@ -127,10 +127,10 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/yourusername/sqlrepl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/willibrandon/sqlrepl" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/yourusername/sqlrepl/edit/main/website/src/guide/publications.md" title="Suggest an edit" aria-label="Suggest an edit">
+                        <a href="https://github.com/willibrandon/sqlrepl/edit/main/website/src/guide/publications.md" title="Suggest an edit" aria-label="Suggest an edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -160,6 +160,144 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="managing-publications"><a class="header" href="#managing-publications">Managing Publications</a></h1>
+<p>This guide covers how to create and manage SQL Server replication publications using the SQL Replication Extension.</p>
+<h2 id="understanding-publications"><a class="header" href="#understanding-publications">Understanding Publications</a></h2>
+<p>A publication is a collection of articles (tables, stored procedures, etc.) that you want to replicate to other databases. The SQL Replication Extension supports two types of publications:</p>
+<ul>
+<li><strong>Snapshot Publications</strong>: Create a complete copy of all articles at a specific point in time</li>
+<li><strong>Transactional Publications</strong>: Continuously replicate changes from the publisher to subscribers</li>
+</ul>
+<h2 id="creating-a-publication"><a class="header" href="#creating-a-publication">Creating a Publication</a></h2>
+<ol>
+<li>
+<p><strong>Access the Publications View</strong></p>
+<ul>
+<li>Expand your server in the SQL Replication view</li>
+<li>Right-click the "Publications" folder</li>
+<li>Select "Create Publication"</li>
+</ul>
+</li>
+<li>
+<p><strong>Configure Distribution</strong>
+If distribution isn't configured yet, the extension will guide you through setting it up:</p>
+<ul>
+<li>Choose a distribution database name (default: "distribution")</li>
+<li>Specify a working directory for snapshot files</li>
+<li>Configure security settings</li>
+</ul>
+</li>
+<li>
+<p><strong>Choose Publication Type</strong>
+Select either:</p>
+<ul>
+<li><strong>Snapshot</strong>: For periodic full data synchronization</li>
+<li><strong>Transactional</strong>: For continuous change replication</li>
+</ul>
+</li>
+<li>
+<p><strong>Name Your Publication</strong></p>
+<ul>
+<li>Enter a unique name for your publication</li>
+<li>Select the database containing the articles to publish</li>
+</ul>
+</li>
+<li>
+<p><strong>Select Articles</strong></p>
+<ul>
+<li>Choose the tables you want to replicate</li>
+<li>The extension automatically filters out system tables</li>
+</ul>
+</li>
+</ol>
+<h2 id="managing-existing-publications"><a class="header" href="#managing-existing-publications">Managing Existing Publications</a></h2>
+<h3 id="viewing-publications"><a class="header" href="#viewing-publications">Viewing Publications</a></h3>
+<ul>
+<li>Expand your server in the SQL Replication view</li>
+<li>Open the "Publications" folder to see all publications</li>
+<li>Click on a publication to view its properties</li>
+</ul>
+<h3 id="monitoring-status"><a class="header" href="#monitoring-status">Monitoring Status</a></h3>
+<ul>
+<li>Check the status indicators next to each publication</li>
+<li>View agent jobs associated with the publication</li>
+<li>Access detailed agent history and logs</li>
+</ul>
+<h3 id="common-tasks"><a class="header" href="#common-tasks">Common Tasks</a></h3>
+<ul>
+<li><strong>Start/Stop Agents</strong>: Use the play/stop buttons next to agent items</li>
+<li><strong>View History</strong>: Click the history icon to see detailed agent logs</li>
+<li><strong>Add Subscriptions</strong>: Right-click a publication to add subscribers</li>
+</ul>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<ol>
+<li>
+<p><strong>Naming Conventions</strong></p>
+<ul>
+<li>Use descriptive names for publications</li>
+<li>Include the type (snapshot/transactional) in the name</li>
+<li>Consider including the database name for clarity</li>
+</ul>
+</li>
+<li>
+<p><strong>Performance Considerations</strong></p>
+<ul>
+<li>Limit the number of articles to what's necessary</li>
+<li>Consider table size when choosing publication type</li>
+<li>Monitor snapshot folder disk space</li>
+</ul>
+</li>
+<li>
+<p><strong>Security</strong></p>
+<ul>
+<li>Use Windows Authentication when possible</li>
+<li>Create dedicated service accounts for replication</li>
+<li>Regularly review permissions</li>
+</ul>
+</li>
+<li>
+<p><strong>Maintenance</strong></p>
+<ul>
+<li>Monitor agent status regularly</li>
+<li>Set up alerts for failed jobs</li>
+<li>Keep snapshot folder clean</li>
+</ul>
+</li>
+</ol>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<h3 id="common-issues"><a class="header" href="#common-issues">Common Issues</a></h3>
+<ol>
+<li>
+<p><strong>Publication Creation Fails</strong></p>
+<ul>
+<li>Verify distribution is properly configured</li>
+<li>Check SQL Server Agent is running</li>
+<li>Ensure sufficient permissions</li>
+</ul>
+</li>
+<li>
+<p><strong>Snapshot Generation Issues</strong></p>
+<ul>
+<li>Verify snapshot folder permissions</li>
+<li>Check available disk space</li>
+<li>Review agent job history</li>
+</ul>
+</li>
+<li>
+<p><strong>Article Access Errors</strong></p>
+<ul>
+<li>Verify schema permissions</li>
+<li>Check for schema changes</li>
+<li>Review article properties</li>
+</ul>
+</li>
+</ol>
+<h3 id="getting-help"><a class="header" href="#getting-help">Getting Help</a></h3>
+<p>If you encounter issues:</p>
+<ol>
+<li>Check the Output panel for detailed error messages</li>
+<li>Review the <a href="../advanced/troubleshooting.html">troubleshooting guide</a></li>
+<li>Search or file issues on <a href="https://github.com/willibrandon/sqlrepl/issues">GitHub</a></li>
+</ol>
 
                     </main>
 

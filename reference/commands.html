@@ -127,10 +127,10 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/yourusername/sqlrepl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/willibrandon/sqlrepl" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/yourusername/sqlrepl/edit/main/website/src/reference/commands.md" title="Suggest an edit" aria-label="Suggest an edit">
+                        <a href="https://github.com/willibrandon/sqlrepl/edit/main/website/src/reference/commands.md" title="Suggest an edit" aria-label="Suggest an edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -160,6 +160,250 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="command-reference"><a class="header" href="#command-reference">Command Reference</a></h1>
+<p>This guide lists all available commands in the SQL Replication Extension for VS Code. Commands can be accessed through:</p>
+<ul>
+<li>The Command Palette (<code>Ctrl+Shift+P</code> or <code>Cmd+Shift+P</code>)</li>
+<li>Context menus in the SQL Replication view</li>
+<li>Toolbar buttons</li>
+</ul>
+<h2 id="server-management"><a class="header" href="#server-management">Server Management</a></h2>
+<h3 id="add-sql-server-connection"><a class="header" href="#add-sql-server-connection">Add SQL Server Connection</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.addConnection</code></li>
+<li><strong>Icon</strong>: ➕</li>
+<li><strong>Description</strong>: Add a new SQL Server instance to manage replication</li>
+<li><strong>Access</strong>:
+<ul>
+<li>Command Palette</li>
+<li>SQL Replication view toolbar</li>
+</ul>
+</li>
+<li><strong>Options</strong>:
+<ul>
+<li>Server name</li>
+<li>Authentication type (Windows/SQL)</li>
+<li>Credentials (for SQL authentication)</li>
+<li>Database name (optional)</li>
+</ul>
+</li>
+</ul>
+<h3 id="remove-server"><a class="header" href="#remove-server">Remove Server</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.removeServer</code></li>
+<li><strong>Icon</strong>: 🗑️</li>
+<li><strong>Description</strong>: Remove a SQL Server connection from the extension</li>
+<li><strong>Access</strong>: Server context menu</li>
+<li><strong>Confirmation</strong>: Required before removal</li>
+</ul>
+<h3 id="disable-publishing-and-distribution"><a class="header" href="#disable-publishing-and-distribution">Disable Publishing and Distribution</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.removeReplication</code></li>
+<li><strong>Icon</strong>: 🗑️</li>
+<li><strong>Description</strong>: Remove all replication configuration from a server</li>
+<li><strong>Access</strong>: Server context menu</li>
+<li><strong>Confirmation</strong>: Required before removal</li>
+<li><strong>Effects</strong>:
+<ul>
+<li>Removes all publications</li>
+<li>Drops distribution database</li>
+<li>Disables distribution</li>
+</ul>
+</li>
+</ul>
+<h2 id="publication-management"><a class="header" href="#publication-management">Publication Management</a></h2>
+<h3 id="create-publication"><a class="header" href="#create-publication">Create Publication</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.createPublication</code></li>
+<li><strong>Icon</strong>: ➕</li>
+<li><strong>Description</strong>: Create a new replication publication</li>
+<li><strong>Access</strong>: Publications folder context menu</li>
+<li><strong>Options</strong>:
+<ul>
+<li>Publication type (Snapshot/Transactional)</li>
+<li>Database selection</li>
+<li>Article selection</li>
+<li>Snapshot folder location</li>
+<li>Security settings</li>
+</ul>
+</li>
+</ul>
+<h2 id="subscription-management"><a class="header" href="#subscription-management">Subscription Management</a></h2>
+<h3 id="create-subscription"><a class="header" href="#create-subscription">Create Subscription</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.createSubscription</code></li>
+<li><strong>Icon</strong>: ➕</li>
+<li><strong>Description</strong>: Create a new subscription to a publication</li>
+<li><strong>Access</strong>:
+<ul>
+<li>Publication context menu</li>
+<li>Subscriptions folder context menu</li>
+</ul>
+</li>
+<li><strong>Options</strong>:
+<ul>
+<li>Subscription type (Push/Pull)</li>
+<li>Subscriber database</li>
+<li>Synchronization options</li>
+<li>Security settings</li>
+</ul>
+</li>
+</ul>
+<h3 id="reinitialize-subscription"><a class="header" href="#reinitialize-subscription">Reinitialize Subscription</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.reinitializeSubscription</code></li>
+<li><strong>Icon</strong>: 🔄</li>
+<li><strong>Description</strong>: Reinitialize an existing subscription</li>
+<li><strong>Access</strong>: Subscription context menu</li>
+<li><strong>Options</strong>:
+<ul>
+<li>Synchronization type</li>
+<li>Snapshot application</li>
+</ul>
+</li>
+</ul>
+<h3 id="drop-subscription"><a class="header" href="#drop-subscription">Drop Subscription</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.dropSubscription</code></li>
+<li><strong>Icon</strong>: 🗑️</li>
+<li><strong>Description</strong>: Remove an existing subscription</li>
+<li><strong>Access</strong>: Subscription context menu</li>
+<li><strong>Confirmation</strong>: Required before removal</li>
+</ul>
+<h2 id="agent-management"><a class="header" href="#agent-management">Agent Management</a></h2>
+<h3 id="start-agent"><a class="header" href="#start-agent">Start Agent</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.startAgent</code></li>
+<li><strong>Icon</strong>: ▶️</li>
+<li><strong>Description</strong>: Start a replication agent job</li>
+<li><strong>Access</strong>: Agent context menu (when stopped)</li>
+<li><strong>Applies to</strong>:
+<ul>
+<li>Snapshot Agent</li>
+<li>Log Reader Agent</li>
+<li>Distribution Agent</li>
+</ul>
+</li>
+</ul>
+<h3 id="stop-agent"><a class="header" href="#stop-agent">Stop Agent</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.stopAgent</code></li>
+<li><strong>Icon</strong>: ⏹️</li>
+<li><strong>Description</strong>: Stop a running replication agent job</li>
+<li><strong>Access</strong>: Agent context menu (when running)</li>
+<li><strong>Confirmation</strong>: Required before stopping</li>
+<li><strong>Applies to</strong>:
+<ul>
+<li>Snapshot Agent</li>
+<li>Log Reader Agent</li>
+<li>Distribution Agent</li>
+</ul>
+</li>
+</ul>
+<h3 id="view-agent-history"><a class="header" href="#view-agent-history">View Agent History</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.viewAgentHistory</code></li>
+<li><strong>Icon</strong>: 📋</li>
+<li><strong>Description</strong>: View detailed agent job history</li>
+<li><strong>Access</strong>: Agent context menu</li>
+<li><strong>Information shown</strong>:
+<ul>
+<li>Execution times</li>
+<li>Status</li>
+<li>Error messages</li>
+<li>Duration</li>
+<li>Step details</li>
+</ul>
+</li>
+</ul>
+<h2 id="general-commands"><a class="header" href="#general-commands">General Commands</a></h2>
+<h3 id="refresh-view"><a class="header" href="#refresh-view">Refresh View</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.refreshTree</code></li>
+<li><strong>Icon</strong>: 🔄</li>
+<li><strong>Description</strong>: Refresh the SQL Replication view</li>
+<li><strong>Access</strong>:
+<ul>
+<li>SQL Replication view toolbar</li>
+<li>Command Palette</li>
+</ul>
+</li>
+<li><strong>Updates</strong>:
+<ul>
+<li>Server status</li>
+<li>Publication list</li>
+<li>Subscription status</li>
+<li>Agent status</li>
+</ul>
+</li>
+</ul>
+<h3 id="show-welcome-message"><a class="header" href="#show-welcome-message">Show Welcome Message</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.showWelcomeMessage</code></li>
+<li><strong>Description</strong>: Display the extension's welcome message</li>
+<li><strong>Access</strong>: Command Palette</li>
+<li><strong>Content</strong>:
+<ul>
+<li>Quick start guide</li>
+<li>Feature overview</li>
+<li>Documentation links</li>
+</ul>
+</li>
+</ul>
+<h2 id="keyboard-shortcuts"><a class="header" href="#keyboard-shortcuts">Keyboard Shortcuts</a></h2>
+<p>The extension uses VS Code's standard keyboard shortcut system. You can customize these in your keyboard shortcuts settings:</p>
+<ol>
+<li>Open Command Palette (<code>Ctrl+Shift+P</code> or <code>Cmd+Shift+P</code>)</li>
+<li>Type "Preferences: Open Keyboard Shortcuts"</li>
+<li>Search for "SQL Replication"</li>
+<li>Customize shortcuts as needed</li>
+</ol>
+<h2 id="context-menu-reference"><a class="header" href="#context-menu-reference">Context Menu Reference</a></h2>
+<p>Different commands are available depending on the context:</p>
+<h3 id="server-node"><a class="header" href="#server-node">Server Node</a></h3>
+<ul>
+<li>Add Connection</li>
+<li>Remove Server</li>
+<li>Disable Publishing and Distribution</li>
+<li>Refresh</li>
+</ul>
+<h3 id="publications-folder"><a class="header" href="#publications-folder">Publications Folder</a></h3>
+<ul>
+<li>Create Publication</li>
+<li>Refresh</li>
+</ul>
+<h3 id="publication-node"><a class="header" href="#publication-node">Publication Node</a></h3>
+<ul>
+<li>Create Subscription</li>
+<li>Refresh</li>
+</ul>
+<h3 id="subscriptions-folder"><a class="header" href="#subscriptions-folder">Subscriptions Folder</a></h3>
+<ul>
+<li>Create Subscription</li>
+<li>Refresh</li>
+</ul>
+<h3 id="subscription-node"><a class="header" href="#subscription-node">Subscription Node</a></h3>
+<ul>
+<li>Reinitialize Subscription</li>
+<li>Drop Subscription</li>
+<li>Refresh</li>
+</ul>
+<h3 id="agent-node"><a class="header" href="#agent-node">Agent Node</a></h3>
+<ul>
+<li>Start/Stop Agent</li>
+<li>View History</li>
+<li>Refresh</li>
+</ul>
+<h2 id="command-line-interface"><a class="header" href="#command-line-interface">Command Line Interface</a></h2>
+<p>The extension also supports command-line operations through VS Code's built-in terminal:</p>
+<pre><code class="language-bash"># Open VS Code with SQL Replication view
+code --command "workbench.view.extension.replicationExplorer"
+
+# Add a new connection (requires user interaction)
+code --command "sqlrepl.addConnection"
+
+# Refresh the replication view
+code --command "sqlrepl.refreshTree"
+</code></pre>
 
                     </main>
 

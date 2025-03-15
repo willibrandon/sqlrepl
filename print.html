@@ -128,7 +128,7 @@
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/yourusername/sqlrepl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/willibrandon/sqlrepl" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
 
@@ -187,21 +187,821 @@
 <p>Having issues? Check out our:</p>
 <ul>
 <li><a href="advanced/troubleshooting.html">Troubleshooting Guide</a></li>
-<li><a href="https://github.com/yourusername/sqlrepl/issues">GitHub Issues</a></li>
+<li><a href="https://github.com/willibrandon/sqlrepl/issues">GitHub Issues</a></li>
 </ul>
 <h2 id="contributing"><a class="header" href="#contributing">Contributing</a></h2>
 <p>We welcome contributions! See our <a href="contributing.html">Contributing Guide</a> for details on how to get involved.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
+<p>This guide will help you get up and running with the SQL Replication Extension for VS Code.</p>
+<h2 id="installation"><a class="header" href="#installation">Installation</a></h2>
+<ol>
+<li>Open VS Code</li>
+<li>Press <code>Ctrl+P</code> (Windows/Linux) or <code>Cmd+P</code> (macOS)</li>
+<li>Type <code>ext install sqlrepl</code></li>
+<li>Click "Install"</li>
+</ol>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<p>Before using the extension, ensure you have:</p>
+<ul>
+<li>SQL Server 2016 or higher installed</li>
+<li>Appropriate permissions to configure replication</li>
+<li>SQL Server Agent running on your instance</li>
+</ul>
+<h2 id="first-steps"><a class="header" href="#first-steps">First Steps</a></h2>
+<ol>
+<li>
+<p><strong>Open the SQL Replication View</strong></p>
+<ul>
+<li>Click the SQL Replication icon in the Activity Bar</li>
+<li>Or use the command palette (<code>Ctrl+Shift+P</code>) and type "SQL Replication: Show Explorer"</li>
+</ul>
+</li>
+<li>
+<p><strong>Add a Connection</strong></p>
+<ul>
+<li>Click the "+" button in the SQL Replication view</li>
+<li>Enter your server details:
+<pre><code>Server: your-server-name
+Authentication: SQL Server or Windows
+Username: your-username (if using SQL Server auth)
+Password: your-password (if using SQL Server auth)
+</code></pre>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Configure Distributor</strong></p>
+<ul>
+<li>Right-click your server in the tree view</li>
+<li>Select "Configure Distribution"</li>
+<li>Follow the wizard to set up distribution</li>
+</ul>
+</li>
+</ol>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<ul>
+<li>Learn how to <a href="guide/publications.html">create publications</a></li>
+<li>Set up <a href="guide/subscriptions.html">subscriptions</a></li>
+<li>Monitor your <a href="guide/monitoring.html">replication status</a></li>
+</ul>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<p>If you encounter any issues:</p>
+<ol>
+<li>Check the Output panel (<code>Ctrl+Shift+U</code>) and select "SQL Replication" from the dropdown</li>
+<li>Verify SQL Server Agent is running</li>
+<li>Ensure you have appropriate permissions</li>
+<li>See our <a href="guide/../advanced/troubleshooting.html">troubleshooting guide</a> for more help</li>
+</ol>
+<h2 id="need-help"><a class="header" href="#need-help">Need Help?</a></h2>
+<ul>
+<li>Check our <a href="https://willibrandon.github.io/sqlrepl">documentation</a></li>
+<li>File issues on <a href="https://github.com/willibrandon/sqlrepl/issues">GitHub</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="installation-1"><a class="header" href="#installation-1">Installation</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="connecting-to-sql-server"><a class="header" href="#connecting-to-sql-server">Connecting to SQL Server</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="managing-publications"><a class="header" href="#managing-publications">Managing Publications</a></h1>
+<p>This guide covers how to create and manage SQL Server replication publications using the SQL Replication Extension.</p>
+<h2 id="understanding-publications"><a class="header" href="#understanding-publications">Understanding Publications</a></h2>
+<p>A publication is a collection of articles (tables, stored procedures, etc.) that you want to replicate to other databases. The SQL Replication Extension supports two types of publications:</p>
+<ul>
+<li><strong>Snapshot Publications</strong>: Create a complete copy of all articles at a specific point in time</li>
+<li><strong>Transactional Publications</strong>: Continuously replicate changes from the publisher to subscribers</li>
+</ul>
+<h2 id="creating-a-publication"><a class="header" href="#creating-a-publication">Creating a Publication</a></h2>
+<ol>
+<li>
+<p><strong>Access the Publications View</strong></p>
+<ul>
+<li>Expand your server in the SQL Replication view</li>
+<li>Right-click the "Publications" folder</li>
+<li>Select "Create Publication"</li>
+</ul>
+</li>
+<li>
+<p><strong>Configure Distribution</strong>
+If distribution isn't configured yet, the extension will guide you through setting it up:</p>
+<ul>
+<li>Choose a distribution database name (default: "distribution")</li>
+<li>Specify a working directory for snapshot files</li>
+<li>Configure security settings</li>
+</ul>
+</li>
+<li>
+<p><strong>Choose Publication Type</strong>
+Select either:</p>
+<ul>
+<li><strong>Snapshot</strong>: For periodic full data synchronization</li>
+<li><strong>Transactional</strong>: For continuous change replication</li>
+</ul>
+</li>
+<li>
+<p><strong>Name Your Publication</strong></p>
+<ul>
+<li>Enter a unique name for your publication</li>
+<li>Select the database containing the articles to publish</li>
+</ul>
+</li>
+<li>
+<p><strong>Select Articles</strong></p>
+<ul>
+<li>Choose the tables you want to replicate</li>
+<li>The extension automatically filters out system tables</li>
+</ul>
+</li>
+</ol>
+<h2 id="managing-existing-publications"><a class="header" href="#managing-existing-publications">Managing Existing Publications</a></h2>
+<h3 id="viewing-publications"><a class="header" href="#viewing-publications">Viewing Publications</a></h3>
+<ul>
+<li>Expand your server in the SQL Replication view</li>
+<li>Open the "Publications" folder to see all publications</li>
+<li>Click on a publication to view its properties</li>
+</ul>
+<h3 id="monitoring-status"><a class="header" href="#monitoring-status">Monitoring Status</a></h3>
+<ul>
+<li>Check the status indicators next to each publication</li>
+<li>View agent jobs associated with the publication</li>
+<li>Access detailed agent history and logs</li>
+</ul>
+<h3 id="common-tasks"><a class="header" href="#common-tasks">Common Tasks</a></h3>
+<ul>
+<li><strong>Start/Stop Agents</strong>: Use the play/stop buttons next to agent items</li>
+<li><strong>View History</strong>: Click the history icon to see detailed agent logs</li>
+<li><strong>Add Subscriptions</strong>: Right-click a publication to add subscribers</li>
+</ul>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<ol>
+<li>
+<p><strong>Naming Conventions</strong></p>
+<ul>
+<li>Use descriptive names for publications</li>
+<li>Include the type (snapshot/transactional) in the name</li>
+<li>Consider including the database name for clarity</li>
+</ul>
+</li>
+<li>
+<p><strong>Performance Considerations</strong></p>
+<ul>
+<li>Limit the number of articles to what's necessary</li>
+<li>Consider table size when choosing publication type</li>
+<li>Monitor snapshot folder disk space</li>
+</ul>
+</li>
+<li>
+<p><strong>Security</strong></p>
+<ul>
+<li>Use Windows Authentication when possible</li>
+<li>Create dedicated service accounts for replication</li>
+<li>Regularly review permissions</li>
+</ul>
+</li>
+<li>
+<p><strong>Maintenance</strong></p>
+<ul>
+<li>Monitor agent status regularly</li>
+<li>Set up alerts for failed jobs</li>
+<li>Keep snapshot folder clean</li>
+</ul>
+</li>
+</ol>
+<h2 id="troubleshooting-1"><a class="header" href="#troubleshooting-1">Troubleshooting</a></h2>
+<h3 id="common-issues"><a class="header" href="#common-issues">Common Issues</a></h3>
+<ol>
+<li>
+<p><strong>Publication Creation Fails</strong></p>
+<ul>
+<li>Verify distribution is properly configured</li>
+<li>Check SQL Server Agent is running</li>
+<li>Ensure sufficient permissions</li>
+</ul>
+</li>
+<li>
+<p><strong>Snapshot Generation Issues</strong></p>
+<ul>
+<li>Verify snapshot folder permissions</li>
+<li>Check available disk space</li>
+<li>Review agent job history</li>
+</ul>
+</li>
+<li>
+<p><strong>Article Access Errors</strong></p>
+<ul>
+<li>Verify schema permissions</li>
+<li>Check for schema changes</li>
+<li>Review article properties</li>
+</ul>
+</li>
+</ol>
+<h3 id="getting-help"><a class="header" href="#getting-help">Getting Help</a></h3>
+<p>If you encounter issues:</p>
+<ol>
+<li>Check the Output panel for detailed error messages</li>
+<li>Review the <a href="guide/../advanced/troubleshooting.html">troubleshooting guide</a></li>
+<li>Search or file issues on <a href="https://github.com/willibrandon/sqlrepl/issues">GitHub</a></li>
+</ol>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="managing-subscriptions"><a class="header" href="#managing-subscriptions">Managing Subscriptions</a></h1>
+<p>This guide explains how to create and manage subscriptions to SQL Server replication publications using the SQL Replication Extension.</p>
+<h2 id="understanding-subscriptions"><a class="header" href="#understanding-subscriptions">Understanding Subscriptions</a></h2>
+<p>A subscription defines how a database receives replicated data from a publication. The SQL Replication Extension supports two types of subscriptions:</p>
+<ul>
+<li><strong>Push Subscriptions</strong>: The distributor pushes changes to subscribers</li>
+<li><strong>Pull Subscriptions</strong>: Subscribers request changes from the distributor</li>
+</ul>
+<h2 id="creating-a-subscription"><a class="header" href="#creating-a-subscription">Creating a Subscription</a></h2>
+<ol>
+<li>
+<p><strong>Access the Subscriptions View</strong></p>
+<ul>
+<li>Expand your server in the SQL Replication view</li>
+<li>Either:
+<ul>
+<li>Right-click a publication to subscribe to it</li>
+<li>Right-click the "Subscriptions" folder to browse available publications</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Choose Subscription Type</strong>
+Select either:</p>
+<ul>
+<li><strong>Push</strong>: Better for immediate synchronization, managed at publisher</li>
+<li><strong>Pull</strong>: Better for occasional synchronization, managed at subscriber</li>
+</ul>
+</li>
+<li>
+<p><strong>Configure Database</strong></p>
+<ul>
+<li>Select or create the subscriber database</li>
+<li>The database name can be different from the publisher</li>
+</ul>
+</li>
+<li>
+<p><strong>Set Synchronization Options</strong>
+Choose when to initialize the subscription:</p>
+<ul>
+<li><strong>Immediate</strong>: Start synchronization right away</li>
+<li><strong>Automatic</strong>: Wait for next snapshot</li>
+<li><strong>Manual</strong>: Initialize later manually</li>
+</ul>
+</li>
+<li>
+<p><strong>Configure Security</strong></p>
+<ul>
+<li>Choose authentication mode for remote connections</li>
+<li>Set up service account permissions if needed</li>
+</ul>
+</li>
+</ol>
+<h2 id="managing-existing-subscriptions"><a class="header" href="#managing-existing-subscriptions">Managing Existing Subscriptions</a></h2>
+<h3 id="viewing-subscriptions"><a class="header" href="#viewing-subscriptions">Viewing Subscriptions</a></h3>
+<ul>
+<li>Expand your server in the SQL Replication view</li>
+<li>Open the "Subscriptions" folder</li>
+<li>Click a subscription to view its properties</li>
+</ul>
+<h3 id="common-tasks-1"><a class="header" href="#common-tasks-1">Common Tasks</a></h3>
+<ol>
+<li>
+<p><strong>Reinitialize Subscription</strong></p>
+<ul>
+<li>Right-click the subscription</li>
+<li>Select "Reinitialize"</li>
+<li>Choose synchronization options</li>
+<li>Monitor initialization progress</li>
+</ul>
+</li>
+<li>
+<p><strong>Monitor Status</strong></p>
+<ul>
+<li>Check status indicators</li>
+<li>View agent job history</li>
+<li>Monitor synchronization progress</li>
+</ul>
+</li>
+<li>
+<p><strong>Drop Subscription</strong></p>
+<ul>
+<li>Right-click the subscription</li>
+<li>Select "Drop Subscription"</li>
+<li>Confirm the removal</li>
+</ul>
+</li>
+</ol>
+<h2 id="best-practices-1"><a class="header" href="#best-practices-1">Best Practices</a></h2>
+<ol>
+<li>
+<p><strong>Subscription Planning</strong></p>
+<ul>
+<li>Choose appropriate subscription type based on needs</li>
+<li>Consider network bandwidth and latency</li>
+<li>Plan for initialization time with large databases</li>
+</ul>
+</li>
+<li>
+<p><strong>Performance Optimization</strong></p>
+<ul>
+<li>Monitor agent job performance</li>
+<li>Schedule initializations during off-peak hours</li>
+<li>Configure appropriate retry intervals</li>
+</ul>
+</li>
+<li>
+<p><strong>Security Considerations</strong></p>
+<ul>
+<li>Use Windows Authentication when possible</li>
+<li>Create dedicated service accounts</li>
+<li>Regularly review permissions</li>
+</ul>
+</li>
+<li>
+<p><strong>Maintenance Tasks</strong></p>
+<ul>
+<li>Monitor subscription status</li>
+<li>Check for synchronization delays</li>
+<li>Validate data consistency periodically</li>
+</ul>
+</li>
+</ol>
+<h2 id="troubleshooting-2"><a class="header" href="#troubleshooting-2">Troubleshooting</a></h2>
+<h3 id="common-issues-1"><a class="header" href="#common-issues-1">Common Issues</a></h3>
+<ol>
+<li>
+<p><strong>Initialization Failures</strong></p>
+<ul>
+<li>Verify network connectivity</li>
+<li>Check permissions on both sides</li>
+<li>Review snapshot availability</li>
+</ul>
+</li>
+<li>
+<p><strong>Synchronization Delays</strong></p>
+<ul>
+<li>Monitor distribution agent</li>
+<li>Check for blocking processes</li>
+<li>Verify agent job status</li>
+</ul>
+</li>
+<li>
+<p><strong>Security Errors</strong></p>
+<ul>
+<li>Verify service account permissions</li>
+<li>Check network security settings</li>
+<li>Review firewall configurations</li>
+</ul>
+</li>
+</ol>
+<h3 id="getting-help-1"><a class="header" href="#getting-help-1">Getting Help</a></h3>
+<p>If you encounter issues:</p>
+<ol>
+<li>Check the Output panel for error messages</li>
+<li>Review agent job history</li>
+<li>See our <a href="guide/../advanced/troubleshooting.html">troubleshooting guide</a></li>
+<li>File issues on <a href="https://github.com/willibrandon/sqlrepl/issues">GitHub</a></li>
+</ol>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="monitoring-replication"><a class="header" href="#monitoring-replication">Monitoring Replication</a></h1>
+<p>This guide covers how to monitor SQL Server replication health and performance using the SQL Replication Extension.</p>
+<h2 id="understanding-replication-agents"><a class="header" href="#understanding-replication-agents">Understanding Replication Agents</a></h2>
+<p>The extension helps you monitor different types of replication agents:</p>
+<ol>
+<li>
+<p><strong>Snapshot Agent</strong></p>
+<ul>
+<li>Creates initial data snapshots</li>
+<li>Runs periodically for snapshot publications</li>
+<li>Critical for initial synchronization</li>
+</ul>
+</li>
+<li>
+<p><strong>Log Reader Agent</strong></p>
+<ul>
+<li>Monitors transaction log for changes</li>
+<li>Moves transactions to distribution database</li>
+<li>Essential for transactional replication</li>
+</ul>
+</li>
+<li>
+<p><strong>Distribution Agent</strong></p>
+<ul>
+<li>Moves transactions from distributor to subscribers</li>
+<li>Handles data delivery and conflict resolution</li>
+<li>Key for maintaining synchronization</li>
+</ul>
+</li>
+</ol>
+<h2 id="monitoring-tools"><a class="header" href="#monitoring-tools">Monitoring Tools</a></h2>
+<h3 id="agent-status-view"><a class="header" href="#agent-status-view">Agent Status View</a></h3>
+<ul>
+<li>Expand a server in the SQL Replication view</li>
+<li>Check agent status indicators:
+<ul>
+<li>▶️ Running</li>
+<li>⏹️ Stopped</li>
+<li>⚠️ Failed</li>
+<li>🔄 In Progress</li>
+</ul>
+</li>
+</ul>
+<h3 id="agent-history"><a class="header" href="#agent-history">Agent History</a></h3>
+<ol>
+<li>Click the history icon next to any agent</li>
+<li>View detailed execution logs:
+<ul>
+<li>Run times</li>
+<li>Status messages</li>
+<li>Error details</li>
+<li>Duration information</li>
+</ul>
+</li>
+</ol>
+<h3 id="performance-monitoring"><a class="header" href="#performance-monitoring">Performance Monitoring</a></h3>
+<ul>
+<li>Monitor agent execution times</li>
+<li>Track synchronization latency</li>
+<li>View error rates and patterns</li>
+</ul>
+<h2 id="common-monitoring-tasks"><a class="header" href="#common-monitoring-tasks">Common Monitoring Tasks</a></h2>
+<h3 id="checking-agent-status"><a class="header" href="#checking-agent-status">Checking Agent Status</a></h3>
+<ol>
+<li>Open the SQL Replication view</li>
+<li>Expand your server</li>
+<li>Look for status indicators</li>
+<li>Start/stop agents as needed</li>
+</ol>
+<h3 id="viewing-job-history"><a class="header" href="#viewing-job-history">Viewing Job History</a></h3>
+<ol>
+<li>Click the history icon</li>
+<li>Review recent executions</li>
+<li>Check for errors or warnings</li>
+<li>Analyze performance patterns</li>
+</ol>
+<h3 id="troubleshooting-issues"><a class="header" href="#troubleshooting-issues">Troubleshooting Issues</a></h3>
+<ol>
+<li>Check agent status</li>
+<li>Review error messages</li>
+<li>Examine job history</li>
+<li>Monitor system resources</li>
+</ol>
+<h2 id="best-practices-2"><a class="header" href="#best-practices-2">Best Practices</a></h2>
+<h3 id="regular-monitoring"><a class="header" href="#regular-monitoring">Regular Monitoring</a></h3>
+<ol>
+<li>
+<p><strong>Check Agent Status Daily</strong></p>
+<ul>
+<li>Verify all agents are running</li>
+<li>Look for warning signs</li>
+<li>Address issues promptly</li>
+</ul>
+</li>
+<li>
+<p><strong>Review Performance Metrics</strong></p>
+<ul>
+<li>Monitor latency</li>
+<li>Check resource usage</li>
+<li>Track error rates</li>
+</ul>
+</li>
+<li>
+<p><strong>Maintain History</strong></p>
+<ul>
+<li>Keep sufficient history</li>
+<li>Archive important logs</li>
+<li>Document issues and solutions</li>
+</ul>
+</li>
+</ol>
+<h3 id="setting-up-alerts"><a class="header" href="#setting-up-alerts">Setting Up Alerts</a></h3>
+<ol>
+<li>
+<p><strong>Agent Failures</strong></p>
+<ul>
+<li>Monitor agent status</li>
+<li>Set up email notifications</li>
+<li>Define escalation procedures</li>
+</ul>
+</li>
+<li>
+<p><strong>Performance Issues</strong></p>
+<ul>
+<li>Track synchronization delays</li>
+<li>Monitor resource usage</li>
+<li>Set thresholds for alerts</li>
+</ul>
+</li>
+<li>
+<p><strong>Error Patterns</strong></p>
+<ul>
+<li>Look for recurring issues</li>
+<li>Track error frequencies</li>
+<li>Identify root causes</li>
+</ul>
+</li>
+</ol>
+<h2 id="troubleshooting-3"><a class="header" href="#troubleshooting-3">Troubleshooting</a></h2>
+<h3 id="common-issues-2"><a class="header" href="#common-issues-2">Common Issues</a></h3>
+<ol>
+<li>
+<p><strong>Agent Not Starting</strong></p>
+<ul>
+<li>Check SQL Server Agent status</li>
+<li>Verify service account permissions</li>
+<li>Review error logs</li>
+</ul>
+</li>
+<li>
+<p><strong>Synchronization Delays</strong></p>
+<ul>
+<li>Check network connectivity</li>
+<li>Monitor system resources</li>
+<li>Review agent job history</li>
+</ul>
+</li>
+<li>
+<p><strong>Performance Problems</strong></p>
+<ul>
+<li>Check for blocking processes</li>
+<li>Monitor disk space</li>
+<li>Review network latency</li>
+</ul>
+</li>
+</ol>
+<h3 id="getting-help-2"><a class="header" href="#getting-help-2">Getting Help</a></h3>
+<p>If you need assistance:</p>
+<ol>
+<li>Check the Output panel for detailed logs</li>
+<li>Review our <a href="guide/../advanced/troubleshooting.html">troubleshooting guide</a></li>
+<li>File issues on <a href="https://github.com/willibrandon/sqlrepl/issues">GitHub</a></li>
+</ol>
+<h2 id="advanced-monitoring"><a class="header" href="#advanced-monitoring">Advanced Monitoring</a></h2>
+<h3 id="using-system-views"><a class="header" href="#using-system-views">Using System Views</a></h3>
+<p>The extension provides access to key system views:</p>
+<ul>
+<li>Distribution agent history</li>
+<li>Log reader agent history</li>
+<li>Snapshot agent history</li>
+<li>Replication performance metrics</li>
+</ul>
+<h3 id="custom-monitoring"><a class="header" href="#custom-monitoring">Custom Monitoring</a></h3>
+<ul>
+<li>Set up custom monitoring schedules</li>
+<li>Configure specific metrics to track</li>
+<li>Create custom alert thresholds</li>
+</ul>
+<h3 id="performance-optimization"><a class="header" href="#performance-optimization">Performance Optimization</a></h3>
+<ul>
+<li>Monitor resource usage</li>
+<li>Track synchronization times</li>
+<li>Identify bottlenecks</li>
+<li>Optimize agent schedules</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="configuration"><a class="header" href="#configuration">Configuration</a></h1>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h1>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="troubleshooting-4"><a class="header" href="#troubleshooting-4">Troubleshooting</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="best-practices-3"><a class="header" href="#best-practices-3">Best Practices</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="command-reference"><a class="header" href="#command-reference">Command Reference</a></h1>
+<p>This guide lists all available commands in the SQL Replication Extension for VS Code. Commands can be accessed through:</p>
+<ul>
+<li>The Command Palette (<code>Ctrl+Shift+P</code> or <code>Cmd+Shift+P</code>)</li>
+<li>Context menus in the SQL Replication view</li>
+<li>Toolbar buttons</li>
+</ul>
+<h2 id="server-management"><a class="header" href="#server-management">Server Management</a></h2>
+<h3 id="add-sql-server-connection"><a class="header" href="#add-sql-server-connection">Add SQL Server Connection</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.addConnection</code></li>
+<li><strong>Icon</strong>: ➕</li>
+<li><strong>Description</strong>: Add a new SQL Server instance to manage replication</li>
+<li><strong>Access</strong>:
+<ul>
+<li>Command Palette</li>
+<li>SQL Replication view toolbar</li>
+</ul>
+</li>
+<li><strong>Options</strong>:
+<ul>
+<li>Server name</li>
+<li>Authentication type (Windows/SQL)</li>
+<li>Credentials (for SQL authentication)</li>
+<li>Database name (optional)</li>
+</ul>
+</li>
+</ul>
+<h3 id="remove-server"><a class="header" href="#remove-server">Remove Server</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.removeServer</code></li>
+<li><strong>Icon</strong>: 🗑️</li>
+<li><strong>Description</strong>: Remove a SQL Server connection from the extension</li>
+<li><strong>Access</strong>: Server context menu</li>
+<li><strong>Confirmation</strong>: Required before removal</li>
+</ul>
+<h3 id="disable-publishing-and-distribution"><a class="header" href="#disable-publishing-and-distribution">Disable Publishing and Distribution</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.removeReplication</code></li>
+<li><strong>Icon</strong>: 🗑️</li>
+<li><strong>Description</strong>: Remove all replication configuration from a server</li>
+<li><strong>Access</strong>: Server context menu</li>
+<li><strong>Confirmation</strong>: Required before removal</li>
+<li><strong>Effects</strong>:
+<ul>
+<li>Removes all publications</li>
+<li>Drops distribution database</li>
+<li>Disables distribution</li>
+</ul>
+</li>
+</ul>
+<h2 id="publication-management"><a class="header" href="#publication-management">Publication Management</a></h2>
+<h3 id="create-publication"><a class="header" href="#create-publication">Create Publication</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.createPublication</code></li>
+<li><strong>Icon</strong>: ➕</li>
+<li><strong>Description</strong>: Create a new replication publication</li>
+<li><strong>Access</strong>: Publications folder context menu</li>
+<li><strong>Options</strong>:
+<ul>
+<li>Publication type (Snapshot/Transactional)</li>
+<li>Database selection</li>
+<li>Article selection</li>
+<li>Snapshot folder location</li>
+<li>Security settings</li>
+</ul>
+</li>
+</ul>
+<h2 id="subscription-management"><a class="header" href="#subscription-management">Subscription Management</a></h2>
+<h3 id="create-subscription"><a class="header" href="#create-subscription">Create Subscription</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.createSubscription</code></li>
+<li><strong>Icon</strong>: ➕</li>
+<li><strong>Description</strong>: Create a new subscription to a publication</li>
+<li><strong>Access</strong>:
+<ul>
+<li>Publication context menu</li>
+<li>Subscriptions folder context menu</li>
+</ul>
+</li>
+<li><strong>Options</strong>:
+<ul>
+<li>Subscription type (Push/Pull)</li>
+<li>Subscriber database</li>
+<li>Synchronization options</li>
+<li>Security settings</li>
+</ul>
+</li>
+</ul>
+<h3 id="reinitialize-subscription"><a class="header" href="#reinitialize-subscription">Reinitialize Subscription</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.reinitializeSubscription</code></li>
+<li><strong>Icon</strong>: 🔄</li>
+<li><strong>Description</strong>: Reinitialize an existing subscription</li>
+<li><strong>Access</strong>: Subscription context menu</li>
+<li><strong>Options</strong>:
+<ul>
+<li>Synchronization type</li>
+<li>Snapshot application</li>
+</ul>
+</li>
+</ul>
+<h3 id="drop-subscription"><a class="header" href="#drop-subscription">Drop Subscription</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.dropSubscription</code></li>
+<li><strong>Icon</strong>: 🗑️</li>
+<li><strong>Description</strong>: Remove an existing subscription</li>
+<li><strong>Access</strong>: Subscription context menu</li>
+<li><strong>Confirmation</strong>: Required before removal</li>
+</ul>
+<h2 id="agent-management"><a class="header" href="#agent-management">Agent Management</a></h2>
+<h3 id="start-agent"><a class="header" href="#start-agent">Start Agent</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.startAgent</code></li>
+<li><strong>Icon</strong>: ▶️</li>
+<li><strong>Description</strong>: Start a replication agent job</li>
+<li><strong>Access</strong>: Agent context menu (when stopped)</li>
+<li><strong>Applies to</strong>:
+<ul>
+<li>Snapshot Agent</li>
+<li>Log Reader Agent</li>
+<li>Distribution Agent</li>
+</ul>
+</li>
+</ul>
+<h3 id="stop-agent"><a class="header" href="#stop-agent">Stop Agent</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.stopAgent</code></li>
+<li><strong>Icon</strong>: ⏹️</li>
+<li><strong>Description</strong>: Stop a running replication agent job</li>
+<li><strong>Access</strong>: Agent context menu (when running)</li>
+<li><strong>Confirmation</strong>: Required before stopping</li>
+<li><strong>Applies to</strong>:
+<ul>
+<li>Snapshot Agent</li>
+<li>Log Reader Agent</li>
+<li>Distribution Agent</li>
+</ul>
+</li>
+</ul>
+<h3 id="view-agent-history"><a class="header" href="#view-agent-history">View Agent History</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.viewAgentHistory</code></li>
+<li><strong>Icon</strong>: 📋</li>
+<li><strong>Description</strong>: View detailed agent job history</li>
+<li><strong>Access</strong>: Agent context menu</li>
+<li><strong>Information shown</strong>:
+<ul>
+<li>Execution times</li>
+<li>Status</li>
+<li>Error messages</li>
+<li>Duration</li>
+<li>Step details</li>
+</ul>
+</li>
+</ul>
+<h2 id="general-commands"><a class="header" href="#general-commands">General Commands</a></h2>
+<h3 id="refresh-view"><a class="header" href="#refresh-view">Refresh View</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.refreshTree</code></li>
+<li><strong>Icon</strong>: 🔄</li>
+<li><strong>Description</strong>: Refresh the SQL Replication view</li>
+<li><strong>Access</strong>:
+<ul>
+<li>SQL Replication view toolbar</li>
+<li>Command Palette</li>
+</ul>
+</li>
+<li><strong>Updates</strong>:
+<ul>
+<li>Server status</li>
+<li>Publication list</li>
+<li>Subscription status</li>
+<li>Agent status</li>
+</ul>
+</li>
+</ul>
+<h3 id="show-welcome-message"><a class="header" href="#show-welcome-message">Show Welcome Message</a></h3>
+<ul>
+<li><strong>Command ID</strong>: <code>sqlrepl.showWelcomeMessage</code></li>
+<li><strong>Description</strong>: Display the extension's welcome message</li>
+<li><strong>Access</strong>: Command Palette</li>
+<li><strong>Content</strong>:
+<ul>
+<li>Quick start guide</li>
+<li>Feature overview</li>
+<li>Documentation links</li>
+</ul>
+</li>
+</ul>
+<h2 id="keyboard-shortcuts"><a class="header" href="#keyboard-shortcuts">Keyboard Shortcuts</a></h2>
+<p>The extension uses VS Code's standard keyboard shortcut system. You can customize these in your keyboard shortcuts settings:</p>
+<ol>
+<li>Open Command Palette (<code>Ctrl+Shift+P</code> or <code>Cmd+Shift+P</code>)</li>
+<li>Type "Preferences: Open Keyboard Shortcuts"</li>
+<li>Search for "SQL Replication"</li>
+<li>Customize shortcuts as needed</li>
+</ol>
+<h2 id="context-menu-reference"><a class="header" href="#context-menu-reference">Context Menu Reference</a></h2>
+<p>Different commands are available depending on the context:</p>
+<h3 id="server-node"><a class="header" href="#server-node">Server Node</a></h3>
+<ul>
+<li>Add Connection</li>
+<li>Remove Server</li>
+<li>Disable Publishing and Distribution</li>
+<li>Refresh</li>
+</ul>
+<h3 id="publications-folder"><a class="header" href="#publications-folder">Publications Folder</a></h3>
+<ul>
+<li>Create Publication</li>
+<li>Refresh</li>
+</ul>
+<h3 id="publication-node"><a class="header" href="#publication-node">Publication Node</a></h3>
+<ul>
+<li>Create Subscription</li>
+<li>Refresh</li>
+</ul>
+<h3 id="subscriptions-folder"><a class="header" href="#subscriptions-folder">Subscriptions Folder</a></h3>
+<ul>
+<li>Create Subscription</li>
+<li>Refresh</li>
+</ul>
+<h3 id="subscription-node"><a class="header" href="#subscription-node">Subscription Node</a></h3>
+<ul>
+<li>Reinitialize Subscription</li>
+<li>Drop Subscription</li>
+<li>Refresh</li>
+</ul>
+<h3 id="agent-node"><a class="header" href="#agent-node">Agent Node</a></h3>
+<ul>
+<li>Start/Stop Agent</li>
+<li>View History</li>
+<li>Refresh</li>
+</ul>
+<h2 id="command-line-interface"><a class="header" href="#command-line-interface">Command Line Interface</a></h2>
+<p>The extension also supports command-line operations through VS Code's built-in terminal:</p>
+<pre><code class="language-bash"># Open VS Code with SQL Replication view
+code --command "workbench.view.extension.replicationExplorer"
+
+# Add a new connection (requires user interaction)
+code --command "sqlrepl.addConnection"
+
+# Refresh the replication view
+code --command "sqlrepl.refreshTree"
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="settings-reference"><a class="header" href="#settings-reference">Settings Reference</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="api-reference"><a class="header" href="#api-reference">API Reference</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="contributing-1"><a class="header" href="#contributing-1">Contributing</a></h1>
