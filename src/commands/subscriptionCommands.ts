@@ -1,12 +1,19 @@
 import * as vscode from 'vscode';
 import { ConnectionService } from '../services/connectionService';
-import { ReplicationService } from '../services/replicationService';
+import { PublicationService } from '../services/publicationService';
+import { SubscriptionService } from '../services/subscriptionService';
 import { SubscriptionOptions } from '../services/interfaces/subscriptionTypes';
 import { FolderTreeItem, PublicationTreeItem, SubscriptionTreeItem } from '../features/treeItems';
 import { SubscriptionType } from '../services/interfaces/replicationTypes';
 
 export class SubscriptionCommands {
-    constructor(private context: vscode.ExtensionContext) {}
+    private publicationService: PublicationService;
+    private subscriptionService: SubscriptionService;
+
+    constructor(private context: vscode.ExtensionContext) {
+        this.publicationService = PublicationService.getInstance();
+        this.subscriptionService = SubscriptionService.getInstance();
+    }
 
     public registerCommands(): void {
         this.context.subscriptions.push(
@@ -86,7 +93,7 @@ export class SubscriptionCommands {
                 
                 // Now get publications from the selected publisher
                 try {
-                    const publications = await ReplicationService.getInstance().getPublications(publisherConnection);
+                    const publications = await this.publicationService.getPublications(publisherConnection);
                     
                     if (publications.length === 0) {
                         throw new Error(`No publications found on ${publisherConnection.serverName}. Please create a publication first.`);
@@ -218,7 +225,7 @@ export class SubscriptionCommands {
                     cancellable: false
                 },
                 async () => {
-                    await ReplicationService.getInstance().createSubscription(connection, options);
+                    await this.subscriptionService.createSubscription(connection, options);
                 }
             );
 
@@ -266,7 +273,7 @@ export class SubscriptionCommands {
                     cancellable: false
                 },
                 async () => {
-                    await ReplicationService.getInstance().reinitializeSubscription(
+                    await this.subscriptionService.reinitializeSubscription(
                         connection,
                         subscription.publisher,
                         subscription.publisherDb,
@@ -321,7 +328,7 @@ export class SubscriptionCommands {
                     cancellable: false
                 },
                 async () => {
-                    await ReplicationService.getInstance().dropSubscription(
+                    await this.subscriptionService.dropSubscription(
                         connection,
                         subscription.publisher,
                         subscription.publisherDb,

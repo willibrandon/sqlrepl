@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionService } from '../services/connectionService';
-import { ReplicationService } from '../services/replicationService';
+import { PublicationService } from '../services/publicationService';
+import { SubscriptionService } from '../services/subscriptionService';
 import { AgentService } from '../services/agentService';
 import { ServerTreeItem, FolderTreeItem, PublicationTreeItem, SubscriptionTreeItem, AgentTreeItem } from './treeItems';
 
@@ -8,7 +9,13 @@ export class ReplicationExplorer implements vscode.TreeDataProvider<ServerTreeIt
     private _onDidChangeTreeData: vscode.EventEmitter<ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem | AgentTreeItem | undefined | null | void> = new vscode.EventEmitter<ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem | AgentTreeItem | undefined | null | void>();
     readonly onDidChangeTreeData: vscode.Event<ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem | AgentTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
-    constructor(private context: vscode.ExtensionContext) {}
+    private publicationService: PublicationService;
+    private subscriptionService: SubscriptionService;
+
+    constructor(private context: vscode.ExtensionContext) {
+        this.publicationService = PublicationService.getInstance();
+        this.subscriptionService = SubscriptionService.getInstance();
+    }
 
     refresh(): void {
         this._onDidChangeTreeData.fire();
@@ -44,7 +51,7 @@ export class ReplicationExplorer implements vscode.TreeDataProvider<ServerTreeIt
             if (element.type === 'publications') {
                 // Show publications for this server
                 try {
-                    const publications = await ReplicationService.getInstance().getPublications(connection);
+                    const publications = await this.publicationService.getPublications(connection);
                     return publications.map(pub => new PublicationTreeItem(pub, element.serverId));
                 } catch (error) {
                     console.error('Failed to get publications for tree view:', error);
@@ -53,7 +60,7 @@ export class ReplicationExplorer implements vscode.TreeDataProvider<ServerTreeIt
             } else if (element.type === 'subscriptions') {
                 // Show subscriptions for this server
                 try {
-                    const subscriptions = await ReplicationService.getInstance().getSubscriptions(connection);
+                    const subscriptions = await this.subscriptionService.getSubscriptions(connection);
                     return subscriptions.map(sub => new SubscriptionTreeItem(sub, element.serverId));
                 } catch (error) {
                     console.error('Failed to get subscriptions for tree view:', error);

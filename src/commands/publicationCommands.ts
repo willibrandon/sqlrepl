@@ -1,13 +1,17 @@
 import * as vscode from 'vscode';
 import { ConnectionService } from '../services/connectionService';
-import { ReplicationService } from '../services/replicationService';
 import { DistributorService } from '../services/distributorService';
+import { PublicationService } from '../services/publicationService';
 import { PublicationOptions } from '../services/interfaces/publicationTypes';
 import { ReplicationType } from '../services/interfaces/replicationTypes';
 import { FolderTreeItem } from '../features/treeItems';
 
 export class PublicationCommands {
-    constructor(private context: vscode.ExtensionContext) {}
+    private publicationService: PublicationService;
+
+    constructor(private context: vscode.ExtensionContext) {
+        this.publicationService = PublicationService.getInstance();
+    }
 
     public registerCommands(): void {
         this.context.subscriptions.push(
@@ -168,7 +172,7 @@ export class PublicationCommands {
             }
 
             // Get tables to replicate
-            const tables = await ReplicationService.getInstance().getTables(connection, database);
+            const tables = await this.publicationService.getTables(connection, database);
             const selectedTables = await vscode.window.showQuickPick(
                 tables.map(table => ({
                     label: table,
@@ -201,7 +205,7 @@ export class PublicationCommands {
                     cancellable: false
                 },
                 async () => {
-                    await ReplicationService.getInstance().createPublication(connection, options);
+                    await this.publicationService.createPublication(connection, options);
                 }
             );
 
