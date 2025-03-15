@@ -1,11 +1,18 @@
 import * as sql from 'mssql';
 import { SqlServerConnection } from './connectionService';
 
-// Type for stored procedure parameters that can handle all SQL Server data types
+/**
+ * Type for stored procedure parameters that can handle all SQL Server data types.
+ * Provides flexibility for various parameter types while maintaining type safety.
+ */
 type SqlProcedureParams = {
     [key: string]: string | number | boolean | Date | Buffer | null | undefined;
 };
 
+/**
+ * Service for managing SQL Server database connections and queries.
+ * Provides connection pooling and query execution capabilities.
+ */
 export class SqlService {
     private static instance: SqlService;
     private pools: Map<string, sql.ConnectionPool>;
@@ -14,6 +21,10 @@ export class SqlService {
         this.pools = new Map<string, sql.ConnectionPool>();
     }
 
+    /**
+     * Gets the singleton instance of SqlService.
+     * Creates the instance if it doesn't exist.
+     */
     public static getInstance(): SqlService {
         if (!SqlService.instance) {
             SqlService.instance = new SqlService();
@@ -21,12 +32,22 @@ export class SqlService {
         return SqlService.instance;
     }
 
-    // For testing purposes
+    /**
+     * Creates a test instance of SqlService.
+     * Used for unit testing to avoid singleton constraints.
+     */
     public static createTestInstance(): SqlService {
         return new SqlService();
     }
 
-    // Made protected for testing
+    /**
+     * Converts a connection specification into a mssql configuration object.
+     * Handles both connection strings and SqlServerConnection objects.
+     * 
+     * @param connection - Connection string or SqlServerConnection object
+     * @returns mssql configuration object
+     * @throws Error if connection parameter is invalid
+     */
     protected getConnectionConfig(connection: SqlServerConnection | string): sql.config {
         // First check if connection is undefined
         if (!connection) {
@@ -109,17 +130,35 @@ export class SqlService {
         return config;
     }
 
-    // Made public for testing
+    /**
+     * Creates a new connection pool.
+     * 
+     * @param config - mssql configuration object
+     * @returns Connected pool instance
+     */
     public async createPool(config: sql.config): Promise<sql.ConnectionPool> {
         const pool = new sql.ConnectionPool(config);
         await pool.connect();
         return pool;
     }
 
+    /**
+     * Generates a unique key for connection pooling.
+     * 
+     * @param connection - Connection details
+     * @returns Unique string key for the connection
+     */
     private getPoolKey(connection: SqlServerConnection): string {
         return `${connection.serverName}_${connection.database || 'master'}_${connection.username || 'windows'}`;
     }
 
+    /**
+     * Gets or creates a connection pool for the specified connection.
+     * 
+     * @param connection - Connection details
+     * @returns Connected pool instance
+     * @throws Error if pool creation fails
+     */
     private async getPool(connection: SqlServerConnection): Promise<sql.ConnectionPool> {
         const key = this.getPoolKey(connection);
         
@@ -142,6 +181,14 @@ export class SqlService {
         return this.pools.get(key)!;
     }
 
+    /**
+     * Executes a SQL query on the specified connection.
+     * 
+     * @param connection - Connection details
+     * @param query - SQL query to execute
+     * @returns Query results as an array of type T
+     * @throws Error if query execution fails
+     */
     public async executeQuery<T>(connection: SqlServerConnection, query: string): Promise<T[]> {
         try {
             const pool = await this.getPool(connection);
@@ -153,6 +200,15 @@ export class SqlService {
         }
     }
 
+    /**
+     * Executes a stored procedure on the specified connection.
+     * 
+     * @param connection - Connection details
+     * @param procedure - Name of the stored procedure
+     * @param params - Optional parameters for the stored procedure
+     * @returns Procedure results as an array of type T
+     * @throws Error if procedure execution fails
+     */
     public async executeProcedure<T>(
         connection: SqlServerConnection, 
         procedure: string, 
@@ -176,6 +232,12 @@ export class SqlService {
         }
     }
 
+    /**
+     * Tests if a connection can be established.
+     * 
+     * @param connection - Connection details to test
+     * @returns True if connection succeeds
+     */
     public async testConnection(connection: SqlServerConnection): Promise<boolean> {
         try {
             const pool = await this.getPool(connection);
@@ -187,6 +249,10 @@ export class SqlService {
         }
     }
 
+    /**
+     * Closes all active connection pools.
+     * Should be called during cleanup or application shutdown.
+     */
     public async closeAll(): Promise<void> {
         for (const pool of this.pools.values()) {
             await pool.close();

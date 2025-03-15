@@ -2,6 +2,10 @@ import { SqlServerConnection } from './connectionService';
 import { SqlService } from './sqlService';
 import { DistributorInfo } from './interfaces';
 
+/**
+ * Service for managing SQL Server replication distributors.
+ * Handles configuration, validation, and management of distribution components.
+ */
 export class DistributorService {
     private static instance: DistributorService;
     private sqlService: SqlService;
@@ -10,6 +14,10 @@ export class DistributorService {
         this.sqlService = SqlService.getInstance();
     }
 
+    /**
+     * Gets the singleton instance of DistributorService.
+     * Creates the instance if it doesn't exist.
+     */
     public static getInstance(): DistributorService {
         if (!DistributorService.instance) {
             DistributorService.instance = new DistributorService();
@@ -17,11 +25,21 @@ export class DistributorService {
         return DistributorService.instance;
     }
 
+    /**
+     * Configures a SQL Server instance as a distributor.
+     * Sets up the distribution database and required components.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @param distributionDb - Name of the distribution database to create
+     * @param workingDirectory - Path for replication working files
+     * @param distributorPassword - Password for the distributor (default provided for testing)
+     * @throws Error if configuration fails
+     */
     public async configureDistributor(
         connection: SqlServerConnection, 
         distributionDb: string = 'distribution',
         workingDirectory?: string,
-        distributorPassword: string = 'Password123!'  // Default password for testing
+        distributorPassword: string = 'Password123!'
     ): Promise<void> {
         try {
             // First resolve the actual server name
@@ -62,6 +80,13 @@ export class DistributorService {
         }
     }
 
+    /**
+     * Retrieves information about the distributor configuration.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @returns Current distributor configuration information
+     * @throws Error if unable to retrieve distributor information
+     */
     public async getDistributorInfo(connection: SqlServerConnection): Promise<DistributorInfo> {
         try {
             // First check if server is configured as a distributor using sp_get_distributor
@@ -99,6 +124,13 @@ export class DistributorService {
         }
     }
 
+    /**
+     * Removes all replication components from a SQL Server instance.
+     * This includes publications, subscriptions, and distribution configuration.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @throws Error if removal process fails
+     */
     public async removeReplication(connection: SqlServerConnection): Promise<void> {
         try {
             // First resolve the actual server name
@@ -164,6 +196,14 @@ export class DistributorService {
         }
     }
 
+    /**
+     * Resolves the actual server name of a SQL Server instance.
+     * Important for ensuring consistent naming in replication configuration.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @returns Resolved server name from SQL Server
+     * @throws Error if server name cannot be resolved
+     */
     public async resolveServerName(connection: SqlServerConnection): Promise<string> {
         try {
             // Query the actual server name from SQL Server
@@ -184,6 +224,13 @@ export class DistributorService {
         }
     }
 
+    /**
+     * Validates that a SQL Server instance is properly configured as a distributor.
+     * Checks for required components and permissions.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @returns True if the instance is a valid distributor
+     */
     public async validateDistributor(connection: SqlServerConnection): Promise<boolean> {
         try {
             // First check using sp_get_distributor

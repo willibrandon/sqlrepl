@@ -1,39 +1,100 @@
 import { SqlServerConnection } from './connectionService';
 import { SqlService } from './sqlService';
 
+/**
+ * Enumeration of SQL Server replication agent types.
+ * Each type represents a different replication process component.
+ */
 export enum AgentType {
+    /** Handles initial synchronization and schema/data snapshots */
     SnapshotAgent = 'Snapshot Agent',
+    
+    /** Monitors transaction log for changes to be replicated */
     LogReaderAgent = 'Log Reader Agent',
+    
+    /** Moves transactions from distributor to subscribers */
     DistributionAgent = 'Distribution Agent',
+    
+    /** Handles bidirectional synchronization for merge replication */
     MergeAgent = 'Merge Agent'
 }
 
+/**
+ * Represents a SQL Server replication agent job.
+ * Contains configuration and status information for a replication agent.
+ */
 export interface AgentJob {
+    /** Unique identifier for the agent job */
     id: string;
+
+    /** Name of the agent job */
     name: string;
+
+    /** Description of the agent's purpose */
     description: string;
+
+    /** Type of replication agent */
     type: AgentType;
+
+    /** Whether the agent job is enabled */
     enabled: boolean;
+
+    /** Whether the agent is currently executing */
     isRunning: boolean;
+
+    /** When the agent last executed */
     lastRunTime?: Date;
+
+    /** Outcome of the last execution */
     lastRunOutcome?: string;
+
+    /** When the agent is scheduled to run next */
     nextRunTime?: Date;
+
+    /** Name of the publishing server */
     publisher?: string;
+
+    /** Name of the publisher database */
     publisherDb?: string;
+
+    /** Name of the publication */
     publication?: string;
+
+    /** Name of the subscribing server */
     subscriber?: string;
+
+    /** Name of the subscriber database */
     subscriberDb?: string;
 }
 
+/**
+ * Represents a historical execution record of an agent job.
+ * Contains details about a specific execution instance.
+ */
 export interface JobHistory {
+    /** Unique identifier for the history record */
     id: string;
+
+    /** When the job executed */
     runDate: Date;
+
+    /** Name of the job step that executed */
     stepName: string;
+
+    /** Outcome status of the execution */
     status: string;
+
+    /** Detailed message about the execution */
     message: string;
+
+    /** How long the job ran */
     runDuration: string;
 }
 
+/**
+ * Service for managing SQL Server replication agents.
+ * Provides functionality to monitor, start, stop, and query agent status.
+ */
 export class AgentService {
     private static instance: AgentService;
     private sqlService: SqlService;
@@ -42,6 +103,10 @@ export class AgentService {
         this.sqlService = SqlService.getInstance();
     }
 
+    /**
+     * Gets the singleton instance of AgentService.
+     * Creates the instance if it doesn't exist.
+     */
     public static getInstance(): AgentService {
         if (!AgentService.instance) {
             AgentService.instance = new AgentService();
@@ -49,6 +114,13 @@ export class AgentService {
         return AgentService.instance;
     }
 
+    /**
+     * Retrieves all replication agent jobs for a SQL Server instance.
+     * Queries both system tables and replication metadata for comprehensive agent information.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @returns Array of agent jobs with their current status
+     */
     public async getAgentJobs(connection: SqlServerConnection): Promise<AgentJob[]> {
         try {
             console.log("Getting agent jobs using direct table queries");
@@ -237,6 +309,12 @@ export class AgentService {
         }
     }
 
+    /**
+     * Retrieves Log Reader Agent jobs for publisher databases.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @returns Array of Log Reader Agent jobs
+     */
     private async getLogReaderAgents(connection: SqlServerConnection): Promise<AgentJob[]> {
         const agents: AgentJob[] = [];
         try {
@@ -374,6 +452,12 @@ export class AgentService {
         return agents;
     }
 
+    /**
+     * Retrieves Distribution Agent jobs for publications.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @returns Array of Distribution Agent jobs
+     */
     private async getDistributionAgents(connection: SqlServerConnection): Promise<AgentJob[]> {
         const agents: AgentJob[] = [];
         try {
@@ -554,6 +638,12 @@ export class AgentService {
         return agents;
     }
 
+    /**
+     * Retrieves Snapshot Agent jobs for publications.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @returns Array of Snapshot Agent jobs
+     */
     private async getSnapshotAgents(connection: SqlServerConnection): Promise<AgentJob[]> {
         const agents: AgentJob[] = [];
         try {
@@ -680,6 +770,13 @@ export class AgentService {
         return agents;
     }
 
+    /**
+     * Starts execution of a replication agent job.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @param jobId - ID of the job to start
+     * @returns True if the job was started successfully
+     */
     public async startJob(connection: SqlServerConnection, jobId: string): Promise<boolean> {
         try {
             // Start the job using supported stored procedure
@@ -693,6 +790,13 @@ export class AgentService {
         }
     }
 
+    /**
+     * Stops execution of a replication agent job.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @param jobId - ID of the job to stop
+     * @returns True if the job was stopped successfully
+     */
     public async stopJob(connection: SqlServerConnection, jobId: string): Promise<boolean> {
         try {
             // Stop the job using supported stored procedure
@@ -706,6 +810,14 @@ export class AgentService {
         }
     }
 
+    /**
+     * Retrieves execution history for a replication agent job.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @param jobId - ID of the job to get history for
+     * @param maxRows - Maximum number of history records to return (default: 50)
+     * @returns Array of job history records
+     */
     public async getJobHistory(connection: SqlServerConnection, jobId: string, maxRows: number = 50): Promise<JobHistory[]> {
         try {
             // Query for job history using the supported stored procedure
@@ -764,6 +876,13 @@ export class AgentService {
         }
     }
 
+    /**
+     * Parses SQL Server date and time integers into a JavaScript Date.
+     * 
+     * @param datePart - SQL Server date in YYYYMMDD format
+     * @param timePart - SQL Server time in HHMMSS format
+     * @returns JavaScript Date object
+     */
     private parseSqlDateTime(datePart: number, timePart: number): Date {
         // SQL Server date format: YYYYMMDD
         const year = Math.floor(datePart / 10000);

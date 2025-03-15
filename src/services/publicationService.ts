@@ -3,6 +3,10 @@ import { SqlService } from './sqlService';
 import { DistributorService } from './distributorService';
 import { PublicationOptions, Publication, RawPublication, ReplicationType } from './interfaces';
 
+/**
+ * Service for managing SQL Server replication publications.
+ * Handles creation, configuration, and monitoring of publications.
+ */
 export class PublicationService {
     private static instance: PublicationService;
     private sqlService: SqlService;
@@ -13,6 +17,10 @@ export class PublicationService {
         this.distributorService = DistributorService.getInstance();
     }
 
+    /**
+     * Gets the singleton instance of PublicationService.
+     * Creates the instance if it doesn't exist.
+     */
     public static getInstance(): PublicationService {
         if (!PublicationService.instance) {
             PublicationService.instance = new PublicationService();
@@ -21,6 +29,14 @@ export class PublicationService {
         return PublicationService.instance;
     }
 
+    /**
+     * Creates a new publication in a SQL Server database.
+     * Enables the database for replication and configures the publication with specified articles.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @param options - Configuration options for the new publication
+     * @throws Error if publication creation fails
+     */
     public async createPublication(connection: SqlServerConnection, options: PublicationOptions): Promise<void> {
         // Enable database for replication
         await this.sqlService.executeQuery(connection, `
@@ -66,6 +82,13 @@ export class PublicationService {
         }
     }
 
+    /**
+     * Retrieves all publications from a SQL Server instance.
+     * Searches across all databases that are enabled for replication.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @returns Array of publications with their current configuration
+     */
     public async getPublications(connection: SqlServerConnection): Promise<Publication[]> {
         try {
             // First resolve the actual server name
@@ -152,6 +175,14 @@ export class PublicationService {
         }
     }
 
+    /**
+     * Retrieves all tables eligible for replication from a database.
+     * Excludes system tables and special replication tables.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @param database - Name of the database to query
+     * @returns Array of table names
+     */
     public async getTables(connection: SqlServerConnection, database: string): Promise<string[]> {
         const result = await this.sqlService.executeQuery<{ TableName: string }>(connection, `
             USE [${database}]

@@ -5,6 +5,11 @@ import { PublicationService } from './publicationService';
 import { AddSubscriptionParams, AddPushSubscriptionParams, AddPullSubscriptionParams } from './interfaces';
 import { Subscription, SubscriptionOptions, SubscriptionType } from './interfaces';
 
+/**
+ * Service for managing SQL Server replication subscriptions.
+ * Handles creation, configuration, monitoring, and management of both push and pull subscriptions.
+ * Works in conjunction with the distributor and publication services to maintain replication topology.
+ */
 export class SubscriptionService {
     private static instance: SubscriptionService;
     private sqlService: SqlService;
@@ -17,6 +22,12 @@ export class SubscriptionService {
         this.publicationService = PublicationService.getInstance();
     }
 
+    /**
+     * Gets the singleton instance of SubscriptionService.
+     * Creates the instance if it doesn't exist.
+     * 
+     * @returns The singleton instance of SubscriptionService
+     */
     public static getInstance(): SubscriptionService {
         if (!SubscriptionService.instance) {
             SubscriptionService.instance = new SubscriptionService();
@@ -24,6 +35,14 @@ export class SubscriptionService {
         return SubscriptionService.instance;
     }
 
+    /**
+     * Creates a new subscription to a publication.
+     * Supports both push and pull subscription types, with optional SQL authentication.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @param options - Configuration options for the new subscription
+     * @throws Error if publication doesn't exist or subscription creation fails
+     */
     public async createSubscription(connection: SqlServerConnection, options: SubscriptionOptions): Promise<void> {
         try {
             // First verify the publication exists
@@ -105,6 +124,19 @@ export class SubscriptionService {
         }
     }
 
+    /**
+     * Removes a subscription from a publication.
+     * Handles both push and pull subscription types appropriately.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @param publisher - Name of the publishing server
+     * @param publisherDb - Name of the publishing database
+     * @param publication - Name of the publication
+     * @param subscriber - Name of the subscribing server
+     * @param subscriberDb - Name of the subscribing database
+     * @param type - Type of subscription (push or pull)
+     * @throws Error if subscription removal fails
+     */
     public async dropSubscription(
         connection: SqlServerConnection, 
         publisher: string,
@@ -137,6 +169,16 @@ export class SubscriptionService {
         }
     }
 
+    /**
+     * Retrieves all subscriptions from a SQL Server instance.
+     * Uses multiple methods to discover subscriptions, including:
+     * - Direct queries to the distribution database
+     * - System stored procedures (sp_helpsubscription, sp_helppullsubscription)
+     * - Fallback methods for incomplete replication configurations
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @returns Array of subscriptions with their current configuration
+     */
     public async getSubscriptions(connection: SqlServerConnection): Promise<Subscription[]> {
         try {
             // First resolve the actual server name
@@ -386,6 +428,18 @@ export class SubscriptionService {
         }
     }
 
+    /**
+     * Reinitializes a subscription, triggering a new snapshot delivery.
+     * This is useful when the subscription is out of sync or needs to be refreshed.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @param publisher - Name of the publishing server
+     * @param publisherDb - Name of the publishing database
+     * @param publication - Name of the publication
+     * @param subscriber - Name of the subscribing server
+     * @param subscriberDb - Name of the subscribing database
+     * @throws Error if reinitialization fails
+     */
     public async reinitializeSubscription(
         connection: SqlServerConnection,
         publisher: string,
@@ -410,6 +464,14 @@ export class SubscriptionService {
         }
     }
 
+    /**
+     * Verifies if a subscription still exists and is active.
+     * Checks both the distribution database and system stored procedures.
+     * 
+     * @param connection - Connection to the SQL Server instance
+     * @param subscription - Subscription to verify
+     * @returns True if the subscription exists and is active
+     */
     public async verifySubscriptionExists(connection: SqlServerConnection, subscription: Subscription): Promise<boolean> {
         try {
             // Check if subscription still exists in SQL Server
