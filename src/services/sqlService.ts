@@ -1,7 +1,6 @@
 import * as sql from 'mssql';
 import { SqlServerConnection } from './connectionService';
 import { ConnectionService } from './connectionService';
-import * as vscode from 'vscode';
 
 /**
  * Type for stored procedure parameters that can handle all SQL Server data types.
@@ -263,12 +262,8 @@ export class SqlService {
                     versionString.includes('CentOS')) {
                     osType = 'Linux';
                     console.log(`Linux detected in version string: "${versionString}"`);
-                    
-                    // Show notification to confirm Linux detection
-                    vscode.window.showInformationMessage(`Linux SQL Server detected: ${connection.serverName}`);
                 } else {
                     console.log(`No Linux indicators found in version string: "${versionString}"`);
-                    vscode.window.showInformationMessage(`Windows SQL Server detected: ${connection.serverName}`);
                 }
                 
                 // Store OS information in the connection object
@@ -291,9 +286,6 @@ export class SqlService {
                     serverVersion: connection.serverVersion
                 });
                 console.log(`Connection update result: ${updateResult ? 'success' : 'failed'}`);
-                
-                // Force refresh the tree view to show the updated icon
-                await vscode.commands.executeCommand('sqlrepl.refreshTree');
                 
                 return true;
             }
