@@ -114,8 +114,13 @@ sp_configure 'agent xps', 1;
 RECONFIGURE;
 GO
 
--- Start SQL Server Agent
-EXEC master.dbo.xp_servicecontrol 'START', 'SQLServerAGENT';
+-- Check and start SQL Server Agent if not running
+DECLARE @agent_status int
+EXEC master.dbo.xp_servicecontrol N'QUERYSTATE', N'SQLServerAGENT', @agent_status OUTPUT
+IF @agent_status <> 4  -- 4 means running
+BEGIN
+    EXEC master.dbo.xp_servicecontrol N'START', N'SQLServerAGENT'
+END
 GO
 "@
 
