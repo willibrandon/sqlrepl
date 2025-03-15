@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { ConnectionService } from '../services/connectionService';
-import { ReplicationService, ReplicationType, PublicationOptions } from '../services/replicationService';
+import { ReplicationService } from '../services/replicationService';
+import { PublicationOptions } from '../services/interfaces/publicationTypes';
+import { ReplicationType } from '../services/interfaces/replicationTypes';
 import { FolderTreeItem } from '../features/treeItems';
 
 export class PublicationCommands {

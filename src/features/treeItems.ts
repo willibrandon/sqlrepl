@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SqlServerConnection } from '../services/connectionService';
-import { Publication, Subscription } from '../services/replicationService';
+import { Publication } from '../services/interfaces/publicationTypes';
+import { Subscription } from '../services/interfaces/subscriptionTypes';
 import { AgentJob, AgentType } from '../services/agentService';
 
 export type TreeItemType = 'server' | 'publications' | 'subscriptions' | 'agents' | 'publication' | 'subscription' | 'agent';

@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { ConnectionService } from '../services/connectionService';
-import { ReplicationService, SubscriptionOptions, SubscriptionType } from '../services/replicationService';
+import { ReplicationService } from '../services/replicationService';
+import { SubscriptionOptions } from '../services/interfaces/subscriptionTypes';
 import { FolderTreeItem, PublicationTreeItem, SubscriptionTreeItem } from '../features/treeItems';
+import { SubscriptionType } from '../services/interfaces/replicationTypes';
 
 export class SubscriptionCommands {
     constructor(private context: vscode.ExtensionContext) {}
