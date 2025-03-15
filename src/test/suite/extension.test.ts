@@ -37,7 +37,7 @@ suite('SQL Replication Extension', () => {
             await vscode.commands.executeCommand('sqlrepl.showWelcomeMessage');
 
             // Verify the message was shown
-            assert.strictEqual(shownMessage, 'Welcome to SQL Server Replication Manager!');
+            assert.strictEqual(shownMessage, 'Welcome to SQL Server Replication Manager! 🎉\n\nTo get started, click the "+" button in the SQL Replication view to add a SQL Server connection.');
         } finally {
             // Restore the original function
             vscode.window.showInformationMessage = originalShowMessage;
