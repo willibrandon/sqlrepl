@@ -110,6 +110,12 @@
         "title": "Disable Publishing and Distribution",
         "category": "SQL Replication",
         "icon": "$(trash)"
+      },
+      {
+        "command": "sqlrepl.showMonitoringDashboard",
+        "title": "Show Monitoring Dashboard",
+        "category": "SQL Replication",
+        "icon": "$(graph)"
       }
     ],
     "menus": {
@@ -123,6 +129,11 @@
           "command": "sqlrepl.refreshTree",
           "when": "view == replicationTree",
           "group": "navigation@2"
+        },
+        {
+          "command": "sqlrepl.showMonitoringDashboard",
+          "when": "view == replicationTree",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
