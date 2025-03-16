@@ -229,7 +229,7 @@
   },
   "dependencies": {
     "@azure/core-auth": "^1.9.0",
-    "mssql": "^10.0.2",
+    "mssql": "^11.0.1",
     "uuid": "^9.0.1"
   }
 }
