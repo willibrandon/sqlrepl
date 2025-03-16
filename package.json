@@ -202,7 +202,8 @@
     "test:ci": "jest --ci --coverage --reporters=default --reporters=jest-junit",
     "test:integration": "jest --config jest.config.js",
     "test:extension": "node ./out/test/runTest.js",
-    "pretest:extension": "tsc -p ./tsconfig.test.json"
+    "pretest:extension": "tsc -p ./tsconfig.test.json",
+    "package": "@vscode/vsce package"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",
@@ -216,6 +217,7 @@
     "@typescript-eslint/parser": "^6.21.0",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.2",
     "electron-rebuild": "^3.2.9",
     "eslint": "^8.56.0",
     "glob": "^11.0.1",
@@ -224,8 +226,8 @@
     "mocha": "^11.1.0",
     "ts-jest": "^29.2.6",
     "typescript": "^5.3.3",
-    "vsce": "^2.15.0",
-    "vscode-test": "^1.6.1"
+    "vscode-test": "^1.6.1",
+    "xml2js": "^0.5.0"
   },
   "dependencies": {
     "@azure/core-auth": "^1.9.0",
