@@ -157,11 +157,32 @@ function Get-ReplicationTypeFromPublication {
     
     try {
         # First check if it's a merge publication
-        $query = "USE [$PublicationDB]; IF EXISTS (SELECT 1 FROM [dbo].[sysmergepublications] WHERE name = '$PublicationName') SELECT 'Merge' AS ReplicationType; ELSE SELECT 'Transactional' AS ReplicationType"
+        $query = @"
+USE [$PublicationDB];
+IF OBJECT_ID('sysmergepublications') IS NOT NULL 
+BEGIN
+    IF EXISTS (SELECT 1 FROM sysmergepublications WHERE name = '$PublicationName')
+        SELECT 'Merge' AS ReplicationType;
+    ELSE
+        SELECT 'Transactional' AS ReplicationType;
+END
+ELSE
+BEGIN
+    IF EXISTS (SELECT 1 FROM dbo.syspublications WHERE name = '$PublicationName')
+        SELECT 'Transactional' AS ReplicationType;
+    ELSE
+        SELECT NULL AS ReplicationType;
+END
+"@
         
         $result = Invoke-SqlCmdWithLogging -ServerInstance $PublisherInstance -Query $query -SqlCredential $SqlCredential `
             -LogMessage "Determining replication type for publication '$PublicationName'" `
             -LogErrorMessage "Failed to determine replication type"
+        
+        if ($null -eq $result.ReplicationType) {
+            Write-Log "Publication '$PublicationName' not found in either merge or transactional publication tables" -Level Warning
+            return $null
+        }
         
         return $result.ReplicationType
     }
@@ -295,6 +316,23 @@ EXEC sp_addpushsubscription_agent
             }
             else {
                 # For pull subscription, run on the subscriber
+                # FIRST add the pull subscription at the subscriber
+                $pullSubscriptionQuery = @"
+USE [$SubscriptionDB]
+EXEC sp_addpullsubscription 
+    @publisher = N'$PublisherInstance', 
+    @publisher_db = N'$PublicationDB',
+    @publication = N'$PublicationName',
+    @independent_agent = N'true',
+    @subscription_type = N'pull',
+    @description = N'Pull subscription from $PublisherInstance to $SubscriberInstance'
+"@
+                
+                Invoke-SqlCmdWithLogging -ServerInstance $SubscriberInstance -Query $pullSubscriptionQuery -SqlCredential $SqlCredential `
+                    -LogMessage "Adding pull subscription for '$PublicationName' on subscriber database" `
+                    -LogErrorMessage "Failed to add pull subscription"
+                
+                # THEN add the pull subscription agent
                 $pullQuery = @"
 USE [$SubscriptionDB]
 EXEC sp_addpullsubscription_agent 
