@@ -103,51 +103,81 @@ function Remove-ReplicationFromDatabases {
         [System.Management.Automation.PSCredential]$Credential
     )
     try {
-        # Get all subscription databases
-        $query = @"
-        SELECT DISTINCT sub.subscriber_db 
-        FROM distribution.dbo.MSsubscriptions sub
-        INNER JOIN distribution.dbo.MSarticles art ON sub.article_id = art.article_id
-"@
+        # Check if distribution database exists
+        $checkQuery = "SELECT CASE WHEN DB_ID('distribution') IS NOT NULL THEN 1 ELSE 0 END as HasDistribution"
         
         if ($Credential) {
-            $subDatabases = Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -Credential $Credential -ErrorAction Stop
+            $distDB = Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $checkQuery -Credential $Credential -ErrorAction Stop
         }
         else {
-            $subDatabases = Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -ErrorAction Stop
+            $distDB = Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $checkQuery -ErrorAction Stop
         }
 
-        # Remove replication from each subscription database
-        foreach ($db in $subDatabases) {
-            $query = "EXEC $($db.subscriber_db)..sp_removedbreplication"
+        if ($distDB.HasDistribution -eq 0) {
+            Write-Log "Distribution database not found - skipping replication cleanup"
+            return $true
+        }
+
+        # Now we know distribution DB exists, get subscription databases
+        $query = @"
+        SELECT DISTINCT sub.subscriber_db 
+        FROM distribution.dbo.MSsubscriptions sub WITH (NOLOCK)
+        INNER JOIN distribution.dbo.MSarticles art WITH (NOLOCK) ON sub.article_id = art.article_id
+        WHERE EXISTS (SELECT 1 FROM distribution.dbo.MSsubscriptions)
+"@
+        
+        try {
             if ($Credential) {
-                Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -Credential $Credential -ErrorAction Stop
+                $subDatabases = Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -Credential $Credential -ErrorAction Stop
             }
             else {
-                Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -ErrorAction Stop
+                $subDatabases = Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -ErrorAction Stop
             }
-            Write-Log "Removed replication from subscription database: $($db.subscriber_db)"
+
+            # Remove replication from each subscription database
+            foreach ($db in $subDatabases) {
+                $query = "EXEC $($db.subscriber_db)..sp_removedbreplication"
+                if ($Credential) {
+                    Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -Credential $Credential -ErrorAction Stop
+                }
+                else {
+                    Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -ErrorAction Stop
+                }
+                Write-Log "Removed replication from subscription database: $($db.subscriber_db)"
+            }
+        }
+        catch {
+            Write-Log "Note: No subscription databases found or error accessing them"
         }
 
         # Get all publication databases
-        $query = "SELECT DISTINCT publisher_db FROM distribution.dbo.MSpublications"
-        if ($Credential) {
-            $pubDatabases = Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -Credential $Credential -ErrorAction Stop
-        }
-        else {
-            $pubDatabases = Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -ErrorAction Stop
-        }
-
-        # Remove replication from each publication database
-        foreach ($db in $pubDatabases) {
-            $query = "EXEC $($db.publisher_db)..sp_removedbreplication"
+        $query = @"
+        SELECT DISTINCT publisher_db 
+        FROM distribution.dbo.MSpublications WITH (NOLOCK)
+        WHERE EXISTS (SELECT 1 FROM distribution.dbo.MSpublications)
+"@
+        try {
             if ($Credential) {
-                Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -Credential $Credential -ErrorAction Stop
+                $pubDatabases = Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -Credential $Credential -ErrorAction Stop
             }
             else {
-                Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -ErrorAction Stop
+                $pubDatabases = Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -ErrorAction Stop
             }
-            Write-Log "Removed replication from publication database: $($db.publisher_db)"
+
+            # Remove replication from each publication database
+            foreach ($db in $pubDatabases) {
+                $query = "EXEC $($db.publisher_db)..sp_removedbreplication"
+                if ($Credential) {
+                    Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -Credential $Credential -ErrorAction Stop
+                }
+                else {
+                    Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $query -ErrorAction Stop
+                }
+                Write-Log "Removed replication from publication database: $($db.publisher_db)"
+            }
+        }
+        catch {
+            Write-Log "Note: No publication databases found or error accessing them"
         }
 
         return $true
@@ -166,6 +196,28 @@ function Remove-DistributionConfiguration {
         [System.Management.Automation.PSCredential]$Credential
     )
     try {
+        # Check if server is configured as a distributor using replication system tables
+        $checkQuery = @"
+        IF EXISTS (SELECT 1 FROM master.dbo.sysdatabases WHERE name = 'distribution')
+           OR EXISTS (SELECT 1 FROM sys.databases WHERE name = 'distribution')
+           OR EXISTS (SELECT 1 FROM master.dbo.sysservers WHERE srvname = @@SERVERNAME AND datasource = @@SERVERNAME AND isremote = 0)
+        SELECT 1 as IsDistributor
+        ELSE 
+        SELECT 0 as IsDistributor
+"@
+
+        if ($Credential) {
+            $isDistributor = Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $checkQuery -Credential $Credential -ErrorAction Stop
+        }
+        else {
+            $isDistributor = Invoke-Sqlcmd -ServerInstance $ServerInstance -Query $checkQuery -ErrorAction Stop
+        }
+
+        if ($isDistributor.IsDistributor -eq 0) {
+            Write-Log "Server is not configured as a distributor - no cleanup needed"
+            return $true
+        }
+
         # First handle the current server as a publisher (the most common case)
         $query = "EXEC sp_dropdistpublisher @publisher = N'$ServerInstance', @no_checks = $([int]$Force)"
         try {
@@ -247,12 +299,12 @@ try {
     }
 
     # Remove distribution configuration
-    Write-Log "Removing distribution configuration..."
+    Write-Log "Checking distribution configuration..."
     if (-not (Remove-DistributionConfiguration -ServerInstance $ServerInstance -DistributionDB $DistributionDB -Force $Force -Credential $SqlCredential)) {
         throw "Failed to remove distribution configuration"
     }
 
-    Write-Log "Successfully disabled publishing and distribution on '$ServerInstance'"
+    Write-Log "Successfully completed replication cleanup on '$ServerInstance'"
 }
 catch {
     $errorMsg = $_.Exception.Message
