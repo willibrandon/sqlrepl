@@ -123,50 +123,29 @@ export class AgentService {
      */
     public async getAgentJobs(connection: SqlServerConnection): Promise<AgentJob[]> {
         try {
-            console.log("Getting agent jobs using direct table queries");
+            console.log("Getting agent jobs using sp_help_job");
             
-            // Query replication jobs directly from system tables instead of using sp_help_job
-            const allJobs = await this.sqlService.executeQuery<{
+            // First get all replication jobs from sysjobs
+            const replicationJobs = await this.sqlService.executeQuery<{
                 job_id: string;
                 name: string;
                 enabled: number;
                 description: string;
                 category_name: string;
-                current_execution_status: number;
-                last_run_date: number;
-                last_run_time: number;
-                last_run_outcome: number;
             }>(connection, `
                 SELECT 
                     CONVERT(NVARCHAR(50), j.job_id) AS job_id,
                     j.name,
                     j.enabled,
                     j.description,
-                    c.name AS category_name,
-                    COALESCE(ja.run_requested_date, NULL) AS is_running,
-                    COALESCE(h.run_date, 0) AS last_run_date,
-                    COALESCE(h.run_time, 0) AS last_run_time,
-                    COALESCE(h.run_status, 0) AS last_run_outcome,
-                    COALESCE(ja.next_scheduled_run_date, NULL) AS next_run_time
+                    c.name AS category_name
                 FROM msdb.dbo.sysjobs j
                 JOIN msdb.dbo.syscategories c ON j.category_id = c.category_id
-                LEFT JOIN (
-                    SELECT job_id, MAX(run_requested_date) AS run_requested_date, MAX(next_scheduled_run_date) AS next_scheduled_run_date
-                    FROM msdb.dbo.sysjobactivity
-                    WHERE run_requested_date IS NOT NULL
-                    GROUP BY job_id
-                ) ja ON j.job_id = ja.job_id
-                LEFT JOIN (
-                    SELECT job_id, MAX(run_date) AS run_date, MAX(run_time) AS run_time, MAX(run_status) AS run_status
-                    FROM msdb.dbo.sysjobhistory
-                    WHERE step_id = 0  -- job outcome
-                    GROUP BY job_id
-                ) h ON j.job_id = h.job_id
                 WHERE c.name IN ('REPL-Distribution', 'REPL-LogReader', 'REPL-Snapshot')
                 ORDER BY j.name
             `);
 
-            if (!allJobs || allJobs.length === 0) {
+            if (!replicationJobs || replicationJobs.length === 0) {
                 console.log('No replication jobs found in sysjobs table, trying alternative methods');
                 
                 // Fall back to other methods if no jobs found directly
@@ -203,103 +182,131 @@ export class AgentService {
                 return allAgentJobs;
             }
             
-            console.log(`Found ${allJobs.length} replication jobs from sysjobs query`);
+            console.log(`Found ${replicationJobs.length} replication jobs from sysjobs query`);
             
-            // Convert the SQL Server jobs to our AgentJob format
-            const agentJobs: AgentJob[] = allJobs.map(job => {
-                // Determine agent type based strictly on category
-                let type: AgentType;
-                const category = (job.category_name || '').toLowerCase();
-                
-                if (category.includes('logreader')) {
-                    type = AgentType.LogReaderAgent;
-                } else if (category.includes('snapshot')) {
-                    type = AgentType.SnapshotAgent;
-                } else if (category.includes('distribution')) {
-                    type = AgentType.DistributionAgent;
-                } else {
-                    // This shouldn't happen with our filtered query, but just in case
-                    console.log(`Unknown agent category: ${job.category_name}, defaulting to Distribution`);
-                    type = AgentType.DistributionAgent;
-                }
-                
-                // Parse last run date/time
-                let lastRunTime: Date | undefined;
-                if (job.last_run_date > 0) {
-                    lastRunTime = this.parseSqlDateTime(job.last_run_date, job.last_run_time);
-                }
-                
-                // Determine if job is running
-                const isRunning = job.current_execution_status !== null && job.current_execution_status > 0;
-                
-                // Map last run outcome
-                let lastRunOutcome: string;
-                switch (job.last_run_outcome) {
-                    case 0: lastRunOutcome = 'Failed'; break;
-                    case 1: lastRunOutcome = 'Succeeded'; break;
-                    case 2: lastRunOutcome = 'Retry'; break;
-                    case 3: lastRunOutcome = 'Canceled'; break;
-                    default: lastRunOutcome = 'Unknown';
-                }
-                
-                // Parse publication info from job name
-                let publisher: string | undefined;
-                let publisherDb: string | undefined;
-                let publication: string | undefined;
-                let subscriber: string | undefined;
-                let subscriberDb: string | undefined;
-                
-                // Jobs typically follow naming patterns we can parse
-                if (type === AgentType.LogReaderAgent) {
-                    // Log Reader format typically: LS-{publisher}-{publisher_db}
-                    const parts = job.name.split('-');
-                    if (parts.length >= 3 && parts[0] === 'LS') {
-                        publisher = parts[1];
-                        publisherDb = parts[2];
-                    }
-                } else if (type === AgentType.DistributionAgent) {
-                    // Distribution format typically has subscriber and publication info
-                    // Example: {publisher}-{publisher_db}-{publication}-{subscriber}-{subscriber_db}
-                    const parts = job.name.split('-');
-                    if (parts.length >= 2) {
-                        // Make reasonable guesses, but these can vary by installation
-                        publisher = parts[0];
-                        if (parts.length >= 3) {
-                            publisherDb = parts[1];
-                            publication = parts[2];
+            // Get detailed status for each job using sp_help_job
+            const agentJobs: AgentJob[] = [];
+            
+            for (const job of replicationJobs) {
+                try {
+                    const jobStatus = await this.sqlService.executeQuery<{
+                        current_execution_status: number;
+                        last_run_date: number;
+                        last_run_time: number;
+                        last_run_outcome: number;
+                        next_scheduled_run_date: number;
+                        next_scheduled_run_time: number;
+                    }>(connection, `
+                        EXEC msdb.dbo.sp_help_job
+                        @job_id = '${job.job_id}',
+                        @job_aspect = 'JOB'
+                    `);
+
+                    if (jobStatus && jobStatus.length > 0) {
+                        const status = jobStatus[0];
+                        
+                        // Determine agent type based strictly on category
+                        let type: AgentType;
+                        const category = (job.category_name || '').toLowerCase();
+                        
+                        if (category.includes('logreader')) {
+                            type = AgentType.LogReaderAgent;
+                        } else if (category.includes('snapshot')) {
+                            type = AgentType.SnapshotAgent;
+                        } else if (category.includes('distribution')) {
+                            type = AgentType.DistributionAgent;
+                        } else {
+                            console.log(`Unknown agent category: ${job.category_name}, defaulting to Distribution`);
+                            type = AgentType.DistributionAgent;
                         }
-                        if (parts.length >= 5) {
-                            subscriber = parts[3];
-                            subscriberDb = parts[4];
+                        
+                        // Parse last run date/time
+                        let lastRunTime: Date | undefined;
+                        if (status.last_run_date > 0) {
+                            lastRunTime = this.parseSqlDateTime(status.last_run_date, status.last_run_time);
                         }
+                        
+                        // Parse next run date/time
+                        let nextRunTime: Date | undefined;
+                        if (status.next_scheduled_run_date > 0) {
+                            nextRunTime = this.parseSqlDateTime(status.next_scheduled_run_date, status.next_scheduled_run_time);
+                        }
+                        
+                        // Determine if job is running (1 = executing)
+                        const isRunning = status.current_execution_status === 1;
+                        
+                        // Map last run outcome
+                        let lastRunOutcome: string;
+                        switch (status.last_run_outcome) {
+                            case 0: lastRunOutcome = 'Failed'; break;
+                            case 1: lastRunOutcome = 'Succeeded'; break;
+                            case 2: lastRunOutcome = 'Retry'; break;
+                            case 3: lastRunOutcome = 'Canceled'; break;
+                            default: lastRunOutcome = 'Unknown';
+                        }
+                        
+                        // Parse publication info from job name
+                        let publisher: string | undefined;
+                        let publisherDb: string | undefined;
+                        let publication: string | undefined;
+                        let subscriber: string | undefined;
+                        let subscriberDb: string | undefined;
+                        
+                        // Jobs typically follow naming patterns we can parse
+                        if (type === AgentType.LogReaderAgent) {
+                            // Log Reader format typically: LS-{publisher}-{publisher_db}
+                            const parts = job.name.split('-');
+                            if (parts.length >= 3 && parts[0] === 'LS') {
+                                publisher = parts[1];
+                                publisherDb = parts[2];
+                            }
+                        } else if (type === AgentType.DistributionAgent) {
+                            // Distribution format typically has subscriber and publication info
+                            // Example: {publisher}-{publisher_db}-{publication}-{subscriber}-{subscriber_db}
+                            const parts = job.name.split('-');
+                            if (parts.length >= 2) {
+                                // Make reasonable guesses, but these can vary by installation
+                                publisher = parts[0];
+                                if (parts.length >= 3) {
+                                    publisherDb = parts[1];
+                                    publication = parts[2];
+                                }
+                                if (parts.length >= 5) {
+                                    subscriber = parts[3];
+                                    subscriberDb = parts[4];
+                                }
+                            }
+                        } else if (type === AgentType.SnapshotAgent) {
+                            // Snapshot format typically: {publisher}-{publisher_db}-{publication}
+                            const parts = job.name.split('-');
+                            if (parts.length >= 3) {
+                                publisher = parts[0];
+                                publisherDb = parts[1];
+                                publication = parts[2];
+                            }
+                        }
+                        
+                        agentJobs.push({
+                            id: job.job_id,
+                            name: job.name,
+                            description: job.description || `Replication ${type}`,
+                            type,
+                            enabled: job.enabled === 1,
+                            isRunning,
+                            lastRunTime,
+                            lastRunOutcome,
+                            nextRunTime,
+                            publisher,
+                            publisherDb,
+                            publication,
+                            subscriber,
+                            subscriberDb
+                        });
                     }
-                } else if (type === AgentType.SnapshotAgent) {
-                    // Snapshot format typically: {publisher}-{publisher_db}-{publication}
-                    const parts = job.name.split('-');
-                    if (parts.length >= 3) {
-                        publisher = parts[0];
-                        publisherDb = parts[1];
-                        publication = parts[2];
-                    }
+                } catch (jobError) {
+                    console.error(`Error getting status for job ${job.job_id}:`, jobError);
                 }
-                
-                return {
-                    id: job.job_id,
-                    name: job.name,
-                    description: job.description || `Replication ${type}`,
-                    type,
-                    enabled: job.enabled === 1,
-                    isRunning,
-                    lastRunTime,
-                    lastRunOutcome,
-                    nextRunTime: undefined,
-                    publisher,
-                    publisherDb,
-                    publication,
-                    subscriber,
-                    subscriberDb
-                };
-            });
+            }
             
             console.log(`Processed ${agentJobs.length} agent jobs`);
             return agentJobs;
@@ -779,6 +786,20 @@ export class AgentService {
      */
     public async startJob(connection: SqlServerConnection, jobId: string): Promise<boolean> {
         try {
+            // First check if the job is already running using sp_help_job
+            const jobStatus = await this.sqlService.executeQuery<{
+                current_execution_status: number;
+            }>(connection, `
+                EXEC msdb.dbo.sp_help_job
+                @job_id = '${jobId}',
+                @job_aspect = 'JOB'
+            `);
+
+            if (jobStatus && jobStatus.length > 0 && jobStatus[0].current_execution_status === 1) {
+                console.log(`Job ${jobId} is already running`);
+                throw new Error('Job is already running');
+            }
+
             // Start the job using supported stored procedure
             await this.sqlService.executeProcedure(connection, 'msdb.dbo.sp_start_job', {
                 job_id: jobId
@@ -786,7 +807,7 @@ export class AgentService {
             return true;
         } catch (error) {
             console.error(`Failed to start job ${jobId}:`, error);
-            return false;
+            throw error; // Re-throw to preserve the error message
         }
     }
 

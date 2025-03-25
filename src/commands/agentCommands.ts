@@ -64,17 +64,22 @@ export class AgentCommands {
 
             // Start the agent job
             const agentService = AgentService.getInstance();
-            const success = await agentService.startJob(connection, node.agent.id);
-
-            if (success) {
-                vscode.window.showInformationMessage(`Started agent: ${node.agent.name}`);
-                // Refresh the tree view to update the agent status
-                vscode.commands.executeCommand('sqlrepl.refreshTree');
-            } else {
-                vscode.window.showErrorMessage(`Failed to start agent: ${node.agent.name}`);
-            }
+            await agentService.startJob(connection, node.agent.id);
+            
+            vscode.window.showInformationMessage(`Started agent: ${node.agent.name}`);
+            // Refresh the tree view to update the agent status
+            vscode.commands.executeCommand('sqlrepl.refreshTree');
         } catch (error) {
-            vscode.window.showErrorMessage(`Error starting agent: ${error instanceof Error ? error.message : String(error)}`);
+            // Handle specific error cases
+            if (error instanceof Error) {
+                if (error.message.includes('already running')) {
+                    vscode.window.showInformationMessage(`Agent ${node.agent.name} is already running`);
+                } else {
+                    vscode.window.showErrorMessage(`Failed to start agent: ${error.message}`);
+                }
+            } else {
+                vscode.window.showErrorMessage(`Failed to start agent: ${String(error)}`);
+            }
         }
     }
 
