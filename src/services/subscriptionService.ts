@@ -70,7 +70,7 @@ export class SubscriptionService {
                 publication: options.publicationName,
                 subscriber: options.subscriberServer,
                 destination_db: options.subscriberDatabase,
-                subscription_type: options.type === 'push' ? 'push' : 'pull',
+                subscription_type: 'push', // Default value
                 sync_type: 'automatic' // Default value
             };
             
@@ -449,14 +449,30 @@ export class SubscriptionService {
         seenKeys: Set<string>
     ): void {
         for (const sub of newSubscriptions) {
-            // Create a unique key for this subscription
-            const key = `${sub.publisher}_${sub.publisherDb}_${sub.publication}_${sub.subscriberDb}`;
+            // Create a unique key based on the essential properties that define a unique subscription
+            const key = `${sub.publication}:${sub.subscriberDb}`;
             
             if (!seenKeys.has(key)) {
                 seenKeys.add(key);
                 existingSubscriptions.push(sub);
+                console.log(`Added subscription: ${key} (${sub.subscription_type})`);
             } else {
-                console.log(`Skipping duplicate subscription: ${key}`);
+                // If we already have this subscription, check if we should update its type
+                const existingIndex = existingSubscriptions.findIndex(existing => 
+                    existing.publication === sub.publication && 
+                    existing.subscriberDb === sub.subscriberDb
+                );
+                
+                if (existingIndex !== -1) {
+                    const existing = existingSubscriptions[existingIndex];
+                    // If new subscription is pull and existing is push, replace it
+                    if (sub.subscription_type === 'pull' && existing.subscription_type === 'push') {
+                        existingSubscriptions[existingIndex] = sub;
+                        console.log(`Replaced push subscription with pull subscription: ${key}`);
+                    } else {
+                        console.log(`Skipping duplicate subscription: ${key} (keeping ${existing.subscription_type})`);
+                    }
+                }
             }
         }
     }
@@ -507,36 +523,73 @@ export class SubscriptionService {
      */
     public async verifySubscriptionExists(connection: SqlServerConnection, subscription: Subscription): Promise<boolean> {
         try {
-            // First try to verify using sp_helpsubscription
+            // First check for pull subscription using sp_helppullsubscription
             try {
-                await this.sqlService.executeQuery(connection, `
-                    USE [${subscription.publisherDb}];
-                    EXEC sp_helpsubscription 
-                        @publication = '${subscription.publication}',
-                        @subscriber = '${subscription.subscriberDb}'
-                `);
-                // If we get here without error, the subscription exists
-                return true;
-            } catch (error) {
-                // If sp_helpsubscription fails, try checking the distribution database
-                try {
-                    const result = await this.sqlService.executeQuery<{ count: number }>(connection, `
-                        USE [distribution];
-                        SELECT COUNT(*) as count
-                        FROM dbo.MSsubscriptions sub
-                        JOIN dbo.MSarticles a ON sub.article_id = a.article_id
-                        JOIN dbo.MSpublications p ON a.publication_id = p.publication_id
-                        WHERE p.name = '${subscription.publication}'
-                        AND sub.subscriber_db = '${subscription.subscriberDb}'
-                        AND sub.status = 1;
-                    `);
-                    
-                    return result && result.length > 0 && result[0].count > 0;
-                } catch (distributionError) {
-                    console.log('Failed to check distribution database:', distributionError);
-                    return false;
+                const pullQuery = `
+                    USE [${subscription.subscriberDb}];
+                    EXEC sp_helppullsubscription 
+                        @publisher = '${subscription.publisher}', 
+                        @publisher_db = '${subscription.publisherDb}', 
+                        @publication = '${subscription.publication}'
+                `;
+                
+                const pullResult = await this.sqlService.executeQuery(connection, pullQuery);
+                if (pullResult && pullResult.length > 0) {
+                    subscription.subscription_type = 'pull';
+                    console.log(`Verified pull subscription: ${subscription.publication} in ${subscription.subscriberDb}`);
+                    return true;
                 }
+            } catch (error) {
+                console.log(`Pull subscription check failed for ${subscription.publication}, trying other methods`);
             }
+
+            // Check for distribution agent job on subscriber (another way to confirm pull subscription)
+            try {
+                const agentQuery = `
+                    USE [msdb];
+                    SELECT COUNT(*) as count
+                    FROM dbo.sysjobs j
+                    JOIN msdb.dbo.syscategories c ON j.category_id = c.category_id
+                    WHERE j.name LIKE '%${subscription.publication}%${subscription.subscriberDb}%'
+                    AND c.name IN ('REPL-Distribution', 'REPL-Merge')
+                    AND j.enabled = 1
+                `;
+                
+                const agentResult = await this.sqlService.executeQuery<{ count: number }>(connection, agentQuery);
+                if (agentResult && agentResult.length > 0 && agentResult[0].count > 0) {
+                    subscription.subscription_type = 'pull';
+                    console.log(`Found active pull subscription agent for ${subscription.publication}`);
+                    return true;
+                }
+            } catch (error) {
+                console.log(`Agent check failed for ${subscription.publication}`);
+            }
+
+            // Finally check the distribution database
+            try {
+                const distQuery = `
+                    USE [distribution];
+                    SELECT sub.subscription_type
+                    FROM dbo.MSsubscriptions sub
+                    JOIN dbo.MSarticles a ON sub.article_id = a.article_id
+                    JOIN dbo.MSpublications p ON a.publication_id = p.publication_id
+                    WHERE p.name = '${subscription.publication}'
+                    AND sub.subscriber_db = '${subscription.subscriberDb}'
+                    AND sub.status = 1
+                `;
+                
+                const distResult = await this.sqlService.executeQuery<{ subscription_type: number }>(connection, distQuery);
+                if (distResult && distResult.length > 0) {
+                    // Update type based on distribution database (0 = push, 1 = pull)
+                    subscription.subscription_type = distResult[0].subscription_type === 1 ? 'pull' : 'push';
+                    console.log(`Distribution database confirms ${subscription.subscription_type} subscription for ${subscription.publication}`);
+                    return true;
+                }
+            } catch (error) {
+                console.log(`Distribution database check failed for ${subscription.publication}`);
+            }
+
+            return false;
         } catch (error) {
             console.error(`Error verifying subscription ${subscription.name}:`, error);
             return false;
