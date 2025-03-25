@@ -196,6 +196,7 @@ export class SubscriptionService {
             console.log(`Found ${databases.length} user databases to check for subscriptions on ${actualServerName}`);
             
             const allSubscriptions: Subscription[] = [];
+            const seenKeys = new Set<string>(); // Track unique subscriptions
             
             // First, check the distributor info
             const distInfo = await this.distributorService.getDistributorInfo(connection);
@@ -235,82 +236,74 @@ export class SubscriptionService {
                     if (localSubs.length > 0) {
                         console.log(`Found ${localSubs.length} local subscriptions in distribution database`);
                         
-                        const mappedLocalSubs = localSubs.map(sub => ({
-                            name: `${sub.publication}_${sub.subscriber_db}`,
-                            publication: sub.publication,
-                            publisher: actualServerName,
-                            publisherDb: sub.publisher_db,
-                            subscriberDb: sub.subscriber_db,
-                            subscription_type: sub.subscription_type === 0 ? 'push' : 'pull' as SubscriptionType,
-                            sync_type: 'automatic',
-                            status: 'Active'
-                        }));
+                        const mappedLocalSubs = localSubs.map(sub => {
+                            // Correctly map subscription_type: 0 = push, 1 = pull
+                            const subscriptionType = sub.subscription_type === 0 ? 'push' : 'pull' as SubscriptionType;
+                            
+                            return {
+                                name: `${sub.publication}_${sub.subscriber_db}`,
+                                publication: sub.publication,
+                                publisher: actualServerName,
+                                publisherDb: sub.publisher_db,
+                                subscriberDb: sub.subscriber_db,
+                                subscription_type: subscriptionType,
+                                sync_type: 'automatic',
+                                status: 'Active'
+                            };
+                        });
                         
-                        allSubscriptions.push(...mappedLocalSubs);
+                        this.addUniqueSubscriptions(mappedLocalSubs, allSubscriptions, seenKeys);
                     }
                 } catch (error) {
                     console.log(`Error querying distribution database for subscriptions: ${error}`);
                 }
                 
-                // If we still don't have subscriptions, try an even more basic approach
-                if (allSubscriptions.length === 0) {
-                    try {
-                        // Try to get the subscription information from sysdistpublishers and other system tables
-                        const basicPubInfo = await this.sqlService.executeQuery<{
-                            pub_db: string,
-                            publication: string
-                        }>(connection, `
-                            SELECT DISTINCT
-                                srv.name as publisher,
-                                p.publisher_db as pub_db,
-                                p.name as publication
-                            FROM [${distInfo.distributionDb}].dbo.MSpublications p
-                            JOIN [${distInfo.distributionDb}].dbo.MSpublishers srv 
-                                ON p.publisher_id = srv.publisher_id
-                            WHERE srv.name = '${actualServerName}'
-                        `) || [];
+                // Check specifically for pull subscriptions
+                try {
+                    const pullSubs = await this.sqlService.executeQuery<{
+                        publisher_db: string,
+                        publication: string,
+                        subscriber_db: string,
+                        subscription_type: number
+                    }>(connection, `
+                        USE [${distInfo.distributionDb}]
                         
-                        if (basicPubInfo.length > 0) {
-                            // For each publication, try to get the subscribers
-                            for (const pub of basicPubInfo) {
-                                // Try a more direct approach to get the subscriber info
-                                try {
-                                    const subscriberInfo = await this.sqlService.executeQuery<{
-                                        name: string
-                                    }>(connection, `
-                                        SELECT name FROM sys.databases
-                                        WHERE name NOT IN ('master', 'model', 'msdb', 'tempdb', 'distribution')
-                                        AND name != '${pub.pub_db}'
-                                    `) || [];
-                                    
-                                    // Use the first non-publisher database as the subscriber
-                                    // This is an approximation when we can't get exact info
-                                    if (subscriberInfo.length > 0) {
-                                        const subscriberDb = subscriberInfo[0].name;
-                                        
-                                        allSubscriptions.push({
-                                            name: `${pub.publication}_${subscriberDb}`,
-                                            publication: pub.publication,
-                                            publisher: actualServerName,
-                                            publisherDb: pub.pub_db,
-                                            subscriberDb: subscriberDb,
-                                            subscription_type: 'push' as SubscriptionType,
-                                            sync_type: 'automatic',
-                                            status: 'Active'
-                                        });
-                                    }
-                                } catch (error) {
-                                    console.log(`Error getting subscriber info: ${error}`);
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        console.log(`Error with fallback query: ${error}`);
+                        -- Query to get pull subscriptions where this server is the subscriber
+                        SELECT DISTINCT
+                            a.publisher_db,
+                            p.name as publication,
+                            sub.subscriber_db,
+                            1 as subscription_type -- force to 1 for pull
+                        FROM dbo.MSsubscriptions sub
+                        JOIN dbo.MSarticles a ON sub.article_id = a.article_id
+                        JOIN dbo.MSpublications p ON a.publication_id = p.publication_id
+                        JOIN dbo.MSpublishers pub ON p.publisher_id = pub.publisher_id
+                        WHERE sub.subscriber_server = '${actualServerName}'
+                        AND sub.status = 1 -- Only active subscriptions
+                    `) || [];
+                    
+                    if (pullSubs.length > 0) {
+                        console.log(`Found ${pullSubs.length} pull subscriptions where this server is the subscriber`);
+                        
+                        const mappedPullSubs = pullSubs.map(sub => ({
+                            name: `${sub.publication}_${sub.subscriber_db}`,
+                            publication: sub.publication,
+                            publisher: actualServerName, // We'd need to get the actual publisher name here
+                            publisherDb: sub.publisher_db,
+                            subscriberDb: sub.subscriber_db,
+                            subscription_type: 'pull' as SubscriptionType, // Always pull in this query
+                            sync_type: 'automatic',
+                            status: 'Active'
+                        }));
+                        
+                        this.addUniqueSubscriptions(mappedPullSubs, allSubscriptions, seenKeys);
                     }
+                } catch (error) {
+                    console.log(`Error querying for pull subscriptions: ${error}`);
                 }
             }
             
-            // If we still have no results, try the traditional sp_help* procedures
+            // If we still don't have results, try the traditional sp_help* procedures
             if (allSubscriptions.length === 0) {
                 // Query subscriptions using the appropriate stored procedures
                 for (const dbName of databases) {
@@ -343,7 +336,7 @@ export class SubscriptionService {
                                     status: sub.status || 'Active'
                                 }));
                                 
-                                allSubscriptions.push(...mappedSubscriptions);
+                                this.addUniqueSubscriptions(mappedSubscriptions, allSubscriptions, seenKeys);
                                 console.log(`Found ${subscriptions.length} subscriptions in ${dbName}`);
                             }
                         } catch (error) {
@@ -370,7 +363,7 @@ export class SubscriptionService {
                                     status: 'Active'
                                 }));
                                 
-                                allSubscriptions.push(...mappedPullSubscriptions);
+                                this.addUniqueSubscriptions(mappedPullSubscriptions, allSubscriptions, seenKeys);
                                 console.log(`Found ${pullSubscriptions.length} pull subscriptions in ${dbName}`);
                             }
                         } catch (error) {
@@ -390,22 +383,43 @@ export class SubscriptionService {
                 
                 if (pubs.length > 0) {
                     // Create a basic entry for each publication
-                    pubs.forEach(pub => {
+                    for (const pub of pubs) {
                         // Find a database that isn't the publication database to use as subscriber
                         const potentialSubscriberDbs = databases.filter(db => db !== pub.database);
                         const subscriberDb = potentialSubscriberDbs.length > 0 ? potentialSubscriberDbs[0] : 'TestDb2';
                         
-                        allSubscriptions.push({
+                        // Try to detect if this is a pull subscription by checking for subscriber agent jobs
+                        let isPull = false;
+                        try {
+                            // Check for pull agent job
+                            const pullAgentCheck = await this.sqlService.executeQuery<{ isPull: number }>(connection, `
+                                SELECT COUNT(*) as isPull FROM msdb.dbo.sysjobs 
+                                WHERE name LIKE '%${pub.name}%${subscriberDb}%' AND category_id IN (
+                                    SELECT category_id FROM msdb.dbo.syscategories 
+                                    WHERE name IN ('REPL-Distribution', 'REPL-Merge')
+                                )
+                            `);
+                            
+                            if (pullAgentCheck && pullAgentCheck.length > 0 && pullAgentCheck[0].isPull > 0) {
+                                isPull = true;
+                            }
+                        } catch (error) {
+                            console.log(`Error checking for pull agent job: ${error}`);
+                        }
+                        
+                        const subscription = {
                             name: `${pub.name}_${subscriberDb}`,
                             publication: pub.name,
                             publisher: connection.serverName,
                             publisherDb: pub.database,
                             subscriberDb: subscriberDb,
-                            subscription_type: 'push',
+                            subscription_type: isPull ? 'pull' : 'push' as SubscriptionType,
                             sync_type: 'automatic',
                             status: 'Active'
-                        });
-                    });
+                        };
+                        
+                        this.addUniqueSubscriptions([subscription], allSubscriptions, seenKeys);
+                    }
                 }
             }
             
@@ -425,6 +439,25 @@ export class SubscriptionService {
         } catch (error) {
             console.error('Failed to get subscriptions:', error);
             return [];
+        }
+    }
+
+    // Helper method to add subscriptions to the result array only if they don't already exist
+    private addUniqueSubscriptions(
+        newSubscriptions: Subscription[], 
+        existingSubscriptions: Subscription[],
+        seenKeys: Set<string>
+    ): void {
+        for (const sub of newSubscriptions) {
+            // Create a unique key for this subscription
+            const key = `${sub.publisher}_${sub.publisherDb}_${sub.publication}_${sub.subscriberDb}`;
+            
+            if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                existingSubscriptions.push(sub);
+            } else {
+                console.log(`Skipping duplicate subscription: ${key}`);
+            }
         }
     }
 
