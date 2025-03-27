@@ -221,11 +221,15 @@ export class AgentTreeItem extends vscode.TreeItem {
         this.tooltip = tooltipLines.join('\n');
         
         // Create a concise description with status and last run info
-        const lastRun = agent.lastRunTime 
-            ? `Last: ${agent.lastRunTime.toLocaleString()} (${agent.lastRunOutcome})`
-            : 'Never Run';
+        const lastRun = agent.isRunning
+            ? (agent.lastRunTime 
+                ? `Running since ${agent.lastRunTime.toLocaleString()}`
+                : 'Running')
+            : (agent.lastRunTime 
+                ? `Last: ${agent.lastRunTime.toLocaleString()} (${agent.lastRunOutcome})`
+                : 'Never Run');
         
-        this.description = `${statusIcon} ${statusText} | ${lastRun}`;
+        this.description = `${statusIcon} ${lastRun}`;
         this.contextValue = agent.isRunning ? 'agent-running' : 'agent-idle';
         
         // Choose icon based on agent type

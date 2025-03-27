@@ -197,9 +197,31 @@ export class AgentService {
                         next_scheduled_run_date: number;
                         next_scheduled_run_time: number;
                     }>(connection, `
-                        EXEC msdb.dbo.sp_help_job
-                        @job_id = '${job.job_id}',
-                        @job_aspect = 'JOB'
+                        SELECT 
+                            CASE 
+                                WHEN ja.run_requested_date IS NOT NULL AND ja.stop_execution_date IS NULL THEN 1
+                                ELSE 0
+                            END AS current_execution_status,
+                            COALESCE(jh.run_date, 0) AS last_run_date,
+                            COALESCE(jh.run_time, 0) AS last_run_time,
+                            COALESCE(jh.run_status, 0) AS last_run_outcome,
+                            COALESCE(js.next_run_date, 0) AS next_scheduled_run_date,
+                            COALESCE(js.next_run_time, 0) AS next_scheduled_run_time
+                        FROM msdb.dbo.sysjobs j
+                        LEFT JOIN msdb.dbo.sysjobactivity ja ON j.job_id = ja.job_id
+                            AND ja.run_requested_date = (
+                                SELECT MAX(ja2.run_requested_date) 
+                                FROM msdb.dbo.sysjobactivity ja2 
+                                WHERE ja2.job_id = j.job_id
+                            )
+                        LEFT JOIN msdb.dbo.sysjobhistory jh ON j.job_id = jh.job_id 
+                            AND jh.instance_id = (
+                                SELECT MAX(h.instance_id)
+                                FROM msdb.dbo.sysjobhistory h
+                                WHERE h.job_id = j.job_id AND h.step_id = 0
+                            )
+                        LEFT JOIN msdb.dbo.sysjobschedules js ON j.job_id = js.job_id
+                        WHERE j.job_id = '${job.job_id}'
                     `);
 
                     if (jobStatus && jobStatus.length > 0) {
@@ -397,40 +419,73 @@ export class AgentService {
                         const job = logReaderInfo[0];
                         console.log(`Found log reader agent job: ${job.name}`);
                         
-                        // Parse last run date/time
-                        let lastRunTime: Date | undefined;
-                        let lastRunOutcome = 'Unknown';
-                        
                         try {
-                            // Get job status using sp_help_job (more reliable for job status)
+                            // Get job status using improved query for more accurate status
                             const jobStatus = await this.sqlService.executeQuery<{
                                 last_run_date: number;
                                 last_run_time: number;
                                 last_run_outcome: number;
                                 current_execution_status: number;
                             }>(connection, `
-                                EXEC msdb.dbo.sp_help_job
-                                @job_id = '${job.job_id}'
+                                SELECT 
+                                    CASE 
+                                        WHEN ja.run_requested_date IS NOT NULL AND ja.stop_execution_date IS NULL THEN 1
+                                        ELSE 0
+                                    END AS current_execution_status,
+                                    COALESCE(jh.run_date, 0) AS last_run_date,
+                                    COALESCE(jh.run_time, 0) AS last_run_time,
+                                    COALESCE(jh.run_status, 0) AS last_run_outcome
+                                FROM msdb.dbo.sysjobs j
+                                LEFT JOIN msdb.dbo.sysjobactivity ja ON j.job_id = ja.job_id
+                                    AND ja.run_requested_date = (
+                                        SELECT MAX(ja2.run_requested_date) 
+                                        FROM msdb.dbo.sysjobactivity ja2 
+                                        WHERE ja2.job_id = j.job_id
+                                    )
+                                LEFT JOIN msdb.dbo.sysjobhistory jh ON j.job_id = jh.job_id 
+                                    AND jh.instance_id = (
+                                        SELECT MAX(h.instance_id)
+                                        FROM msdb.dbo.sysjobhistory h
+                                        WHERE h.job_id = j.job_id AND h.step_id = 0
+                                    )
+                                WHERE j.job_id = '${job.job_id}'
                             `);
                             
                             if (jobStatus && jobStatus.length > 0) {
                                 const status = jobStatus[0];
-                                
+                                console.log(`Raw job status for ${job.name}:`, {
+                                    current_execution_status: status.current_execution_status,
+                                    last_run_date: status.last_run_date,
+                                    last_run_time: status.last_run_time,
+                                    last_run_outcome: status.last_run_outcome
+                                });
+
+                                // Parse last run date/time
+                                let lastRunTime: Date | undefined;
                                 if (status.last_run_date > 0) {
                                     lastRunTime = this.parseSqlDateTime(status.last_run_date, status.last_run_time);
+                                    console.log(`Parsed lastRunTime for ${job.name}:`, lastRunTime);
+                                } else {
+                                    console.log(`No valid last run date for ${job.name} (last_run_date: ${status.last_run_date})`);
                                 }
                                 
                                 // Map last run outcome
-                                switch (status.last_run_outcome) {
-                                    case 0: lastRunOutcome = 'Failed'; break;
-                                    case 1: lastRunOutcome = 'Succeeded'; break;
-                                    case 2: lastRunOutcome = 'Retry'; break;
-                                    case 3: lastRunOutcome = 'Canceled'; break;
-                                    default: lastRunOutcome = 'Unknown';
-                                }
+                                const lastRunOutcome = status.last_run_outcome === 0 ? 'Failed' :
+                                    status.last_run_outcome === 1 ? 'Succeeded' :
+                                    status.last_run_outcome === 2 ? 'Retry' :
+                                    status.last_run_outcome === 3 ? 'Canceled' :
+                                    'Unknown';
                                 
                                 // Determine if job is running
                                 const isRunning = status.current_execution_status > 0;
+                                console.log(`Job ${job.name} status: isRunning=${isRunning}, lastRunOutcome=${lastRunOutcome}`);
+
+                                // For running jobs, if we don't have a last run time but the job is running,
+                                // use the current time as the last run time
+                                if (isRunning && !lastRunTime) {
+                                    lastRunTime = new Date();
+                                    console.log(`Job ${job.name} is running, using current time:`, lastRunTime);
+                                }
                                 
                                 agents.push({
                                     id: job.job_id,
@@ -440,7 +495,7 @@ export class AgentService {
                                     enabled: true, // Assume enabled if found
                                     isRunning,
                                     lastRunTime,
-                                    lastRunOutcome,
+                                    lastRunOutcome: isRunning && !lastRunTime ? 'In Progress' : lastRunOutcome,
                                     publisher: connection.serverName,
                                     publisherDb: db.dbname
                                 });
@@ -723,8 +778,32 @@ export class AgentService {
                                 -- Only return if we found a valid job_id
                                 IF @job_id IS NOT NULL
                                 BEGIN
-                                    EXEC msdb.dbo.sp_help_job
-                                    @job_id = @job_id
+                                    SELECT 
+                                        CONVERT(NVARCHAR(50), j.job_id) AS job_id,
+                                        j.name,
+                                        j.enabled,
+                                        j.description,
+                                        CASE 
+                                            WHEN ja.run_requested_date IS NOT NULL AND ja.stop_execution_date IS NULL THEN 1
+                                            ELSE 0
+                                        END AS current_execution_status,
+                                        COALESCE(jh.run_date, 0) AS last_run_date,
+                                        COALESCE(jh.run_time, 0) AS last_run_time,
+                                        COALESCE(jh.run_status, 0) AS last_run_outcome
+                                    FROM msdb.dbo.sysjobs j
+                                    LEFT JOIN msdb.dbo.sysjobactivity ja ON j.job_id = ja.job_id
+                                        AND ja.run_requested_date = (
+                                            SELECT MAX(ja2.run_requested_date) 
+                                            FROM msdb.dbo.sysjobactivity ja2 
+                                            WHERE ja2.job_id = j.job_id
+                                        )
+                                    LEFT JOIN msdb.dbo.sysjobhistory jh ON j.job_id = jh.job_id 
+                                        AND jh.instance_id = (
+                                            SELECT MAX(h.instance_id)
+                                            FROM msdb.dbo.sysjobhistory h
+                                            WHERE h.job_id = j.job_id AND h.step_id = 0
+                                        )
+                                    WHERE j.job_id = @job_id
                                 END
                             `);
 
