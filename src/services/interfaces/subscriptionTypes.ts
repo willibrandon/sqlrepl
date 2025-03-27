@@ -53,6 +53,9 @@ export interface Subscription {
     /** Name of the publisher database */
     publisherDb: string;
 
+    /** Name of the subscribing server */
+    subscriber: string;
+
     /** Name of the subscriber database */
     subscriberDb: string;
 
