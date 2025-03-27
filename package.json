@@ -106,6 +106,12 @@
         "icon": "$(history)"
       },
       {
+        "command": "sqlrepl.viewSubscriptionSyncStatus",
+        "title": "View Synchronization Status",
+        "category": "SQL Replication",
+        "icon": "$(sync-ignored)"
+      },
+      {
         "command": "sqlrepl.removeReplication",
         "title": "Disable Publishing and Distribution",
         "category": "SQL Replication",
@@ -181,6 +187,11 @@
           "command": "sqlrepl.viewAgentHistory",
           "when": "view == replicationTree && (viewItem == agent-idle || viewItem == agent-running)",
           "group": "inline@2"
+        },
+        {
+          "command": "sqlrepl.viewSubscriptionSyncStatus",
+          "when": "view == replicationTree && viewItem == subscription",
+          "group": "inline@3"
         },
         {
           "command": "sqlrepl.removeReplication",

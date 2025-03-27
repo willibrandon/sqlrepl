@@ -5,6 +5,7 @@ import { SubscriptionService } from '../services/subscriptionService';
 import { SubscriptionOptions } from '../services/interfaces/subscriptionTypes';
 import { FolderTreeItem, PublicationTreeItem, SubscriptionTreeItem } from '../features/treeItems';
 import { SubscriptionType } from '../services/interfaces/replicationTypes';
+import { SubscriptionSyncPanel } from '../features/subscriptionSyncPanel';
 
 /**
  * Manages VS Code commands related to SQL Server replication subscriptions.
@@ -25,12 +26,14 @@ export class SubscriptionCommands {
      * - Creating new subscriptions
      * - Reinitializing existing subscriptions
      * - Dropping subscriptions
+     * - Viewing subscription sync status
      */
     public registerCommands(): void {
         this.context.subscriptions.push(
             vscode.commands.registerCommand('sqlrepl.createSubscription', (node?: PublicationTreeItem | FolderTreeItem) => this.createSubscription(node)),
             vscode.commands.registerCommand('sqlrepl.reinitializeSubscription', (node?: SubscriptionTreeItem) => this.reinitializeSubscription(node)),
-            vscode.commands.registerCommand('sqlrepl.dropSubscription', (node?: SubscriptionTreeItem) => this.dropSubscription(node))
+            vscode.commands.registerCommand('sqlrepl.dropSubscription', (node?: SubscriptionTreeItem) => this.dropSubscription(node)),
+            vscode.commands.registerCommand('sqlrepl.viewSubscriptionSyncStatus', (node?: SubscriptionTreeItem) => this.viewSubscriptionSyncStatus(node))
         );
     }
 
@@ -386,6 +389,27 @@ export class SubscriptionCommands {
 
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to drop subscription: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+
+    /**
+     * Shows the synchronization status panel for a subscription.
+     * Displays real-time status of associated distribution agents and provides
+     * controls for starting/stopping synchronization.
+     * 
+     * @param node - The tree item representing the subscription to show status for
+     */
+    private async viewSubscriptionSyncStatus(node?: SubscriptionTreeItem): Promise<void> {
+        try {
+            if (!node) {
+                vscode.window.showErrorMessage('No subscription selected');
+                return;
+            }
+
+            SubscriptionSyncPanel.show(node.subscription, node.serverId, this.context);
+
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to show subscription sync status: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 }
