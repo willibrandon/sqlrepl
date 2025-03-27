@@ -109,7 +109,7 @@
         "command": "sqlrepl.viewSubscriptionSyncStatus",
         "title": "View Synchronization Status",
         "category": "SQL Replication",
-        "icon": "$(sync-ignored)"
+        "icon": "$(play-circle)"
       },
       {
         "command": "sqlrepl.removeReplication",
