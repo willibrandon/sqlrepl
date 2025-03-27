@@ -44,6 +44,69 @@ export class ReplicationExplorer implements vscode.TreeDataProvider<ServerTreeIt
     }
 
     /**
+     * Expands all nodes in the tree view.
+     * @param treeView - The VS Code TreeView to expand
+     */
+    async expandAll(treeView: vscode.TreeView<any>): Promise<void> {
+        // Get all root nodes (server nodes)
+        const connections = ConnectionService.getInstance(this.context).getConnections();
+        const serverNodes = connections.map(conn => new ServerTreeItem(conn, vscode.TreeItemCollapsibleState.Expanded));
+        
+        // Expand each server node
+        for (const serverNode of serverNodes) {
+            await treeView.reveal(serverNode, { expand: true });
+            
+            // Get folder nodes for each server
+            const folderNodes = [
+                new FolderTreeItem('Publications', 'publications', serverNode.connection.id, vscode.TreeItemCollapsibleState.Expanded),
+                new FolderTreeItem('Subscriptions', 'subscriptions', serverNode.connection.id, vscode.TreeItemCollapsibleState.Expanded),
+                new FolderTreeItem('Agents', 'agents', serverNode.connection.id, vscode.TreeItemCollapsibleState.Expanded)
+            ];
+            
+            // Expand each folder node
+            for (const folderNode of folderNodes) {
+                await treeView.reveal(folderNode, { expand: true, select: false });
+                
+                // For each folder type, get and expand its children
+                if (folderNode.type === 'publications') {
+                    try {
+                        const publications = await this.publicationService.getPublications(serverNode.connection);
+                        for (const pub of publications) {
+                            const pubNode = new PublicationTreeItem(pub, serverNode.connection.id, vscode.TreeItemCollapsibleState.Expanded);
+                            await treeView.reveal(pubNode, { expand: true, select: false });
+                        }
+                    } catch (error) {
+                        console.error('Failed to expand publications:', error);
+                    }
+                } else if (folderNode.type === 'subscriptions') {
+                    try {
+                        const subscriptions = await this.subscriptionService.getSubscriptions(serverNode.connection);
+                        for (const sub of subscriptions) {
+                            const subNode = new SubscriptionTreeItem(sub, serverNode.connection.id, vscode.TreeItemCollapsibleState.Expanded);
+                            await treeView.reveal(subNode, { expand: true, select: false });
+                        }
+                    } catch (error) {
+                        console.error('Failed to expand subscriptions:', error);
+                    }
+                } else if (folderNode.type === 'agents') {
+                    try {
+                        const agents = await AgentService.getInstance().getAgentJobs(serverNode.connection);
+                        for (const agent of agents) {
+                            const agentNode = new AgentTreeItem(agent, serverNode.connection.id, vscode.TreeItemCollapsibleState.Expanded);
+                            await treeView.reveal(agentNode, { expand: true, select: false });
+                        }
+                    } catch (error) {
+                        console.error('Failed to expand agents:', error);
+                    }
+                }
+            }
+        }
+        
+        // Refresh the tree view to ensure all nodes are properly expanded
+        this.refresh();
+    }
+
+    /**
      * Gets the tree item for the given element.
      * Required by VS Code's TreeDataProvider interface.
      * @param element - The element to get the tree item for

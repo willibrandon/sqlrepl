@@ -58,6 +58,23 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "sqlrepl.toggleCollapse",
+        "title": "Toggle Collapse/Expand All",
+        "category": "SQL Replication"
+      },
+      {
+        "command": "sqlrepl.toggleCollapseCollapsed",
+        "title": "Expand All",
+        "category": "SQL Replication",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "sqlrepl.toggleCollapseExpanded",
+        "title": "Collapse All",
+        "category": "SQL Replication",
+        "icon": "$(collapse-all)"
+      },
+      {
         "command": "sqlrepl.createPublication",
         "title": "Create Publication",
         "category": "SQL Replication",
@@ -132,14 +149,24 @@
           "group": "navigation@1"
         },
         {
+          "command": "sqlrepl.toggleCollapseCollapsed",
+          "when": "view == replicationTree && sqlrepl.isCollapsed == true",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sqlrepl.toggleCollapseExpanded",
+          "when": "view == replicationTree && sqlrepl.isCollapsed == false",
+          "group": "navigation@2"
+        },
+        {
           "command": "sqlrepl.refreshTree",
           "when": "view == replicationTree",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "sqlrepl.showMonitoringDashboard",
           "when": "view == replicationTree",
-          "group": "navigation@3"
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
