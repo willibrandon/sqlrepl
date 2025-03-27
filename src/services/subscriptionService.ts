@@ -1,7 +1,6 @@
 import { SqlServerConnection } from './connectionService';
 import { SqlService } from './sqlService';
 import { DistributorService } from './distributorService';
-import { PublicationService } from './publicationService';
 import { AddSubscriptionParams, AddPushSubscriptionParams, AddPullSubscriptionParams } from './interfaces';
 import { Subscription, SubscriptionOptions, SubscriptionType } from './interfaces';
 
@@ -14,12 +13,10 @@ export class SubscriptionService {
     private static instance: SubscriptionService;
     private sqlService: SqlService;
     private distributorService: DistributorService;
-    private publicationService: PublicationService;
 
     private constructor() {
         this.sqlService = SqlService.getInstance();
         this.distributorService = DistributorService.getInstance();
-        this.publicationService = PublicationService.getInstance();
     }
 
     /**
@@ -567,7 +564,7 @@ export class SubscriptionService {
 
     /**
      * Retrieves subscriptions using sp_helpsubscription and sp_helppullsubscription
-     * by iterating through user databases. Serves as a fallback or complement.
+     * by iterating through user databases.
      */
     private async getSubscriptionsFromStoredProcs(
         connection: SqlServerConnection,
@@ -583,7 +580,7 @@ export class SubscriptionService {
                 console.log(`Checking database: ${dbName}`);
                 
                 await this.sqlService.executeQuery(connection, `USE [${dbName}]`);
-                
+
                 // 1. Check for PUSH subscriptions PUBLISHED from this database
                 //    sp_helpsubscription returns info about subscriptions TO publications in the current DB.
                 try {
@@ -613,8 +610,10 @@ export class SubscriptionService {
                             sync_type: sub.sync_type || 'automatic',
                             status: sub.status || 'Active'
                         };
+                        
                         this.addUniqueSubscriptions([mappedSub], foundSubscriptions, tempSeenKeys);
                     });
+
                     if (pushSubs.length > 0) console.log(`  sp_helpsubscription found ${pushSubs.length} entries in ${dbName}`);
 
                 } catch (spError) {
@@ -654,8 +653,10 @@ export class SubscriptionService {
                             sync_type: 'automatic',       // Default value
                             status: 'Active'              // Default value
                         };
+
                          this.addUniqueSubscriptions([mappedSub], foundSubscriptions, tempSeenKeys);
                     });
+
                     if (pullSubs.length > 0) console.log(`  sp_helppullsubscription found ${pullSubs.length} entries in ${dbName}`);
 
                 } catch (spError) {
@@ -677,6 +678,7 @@ export class SubscriptionService {
                  console.error(`Error processing database ${dbName}: ${dbError instanceof Error ? dbError.message : dbError}`);
             }
         }
+
         console.log(`Stored procedure check found ${foundSubscriptions.length} unique subscriptions.`);
         return foundSubscriptions;
     }
@@ -739,6 +741,7 @@ export class SubscriptionService {
                 SELECT name FROM sys.databases 
                 WHERE database_id > 4 -- Exclude system DBs (master, tempdb, model, msdb)
                 AND state = 0 -- Online databases only
+                AND name NOT IN ('distribution')
                 ORDER BY name
             `) || [];
             
@@ -752,59 +755,10 @@ export class SubscriptionService {
                     actualServerName,
                     databases
                 );
+
                 this.addUniqueSubscriptions(sprocSubs, allSubscriptions, seenKeys);
             }
-            
-            // 6. Last resort: If we know a publication exists but couldn't get its subscriber,
-            // create a basic entry with a reasonable subscriber DB
-            if (allSubscriptions.length === 0) {
-                // Try to at least get a list of publications
-                const pubs = await this.publicationService.getPublications(connection);
-                
-                if (pubs.length > 0) {
-                    console.log(`Found ${pubs.length} publications but no subscriptions, creating fallback entries`);
-                    // Create a basic entry for each publication
-                    for (const pub of pubs) {
-                        // Find a database that isn't the publication database to use as subscriber
-                        const potentialSubscriberDbs = databases.filter(db => db !== pub.database);
-                        const subscriberDb = potentialSubscriberDbs.length > 0 ? potentialSubscriberDbs[0] : 'distribution';
-                        
-                        // Try to detect if this is a pull subscription by checking for subscriber agent jobs
-                        let isPull = false;
-                        try {
-                            // Check for pull agent job
-                            const pullAgentCheck = await this.sqlService.executeQuery<{ isPull: number }>(connection, `
-                                SELECT COUNT(*) as isPull FROM msdb.dbo.sysjobs 
-                                WHERE name LIKE '%${pub.name}%${subscriberDb}%' AND category_id IN (
-                                    SELECT category_id FROM msdb.dbo.syscategories 
-                                    WHERE name IN ('REPL-Distribution', 'REPL-Merge')
-                                )
-                            `);
-                            
-                            if (pullAgentCheck && pullAgentCheck.length > 0 && pullAgentCheck[0].isPull > 0) {
-                                isPull = true;
-                            }
-                        } catch (error) {
-                            console.log(`Error checking for pull agent job: ${error}`);
-                        }
-                        
-                        const subscription: Subscription = {
-                            name: `${pub.name}_${subscriberDb}`,
-                            publication: pub.name,
-                            publisher: connection.serverName,
-                            publisherDb: pub.database,
-                            subscriber: isPull ? actualServerName : 'unknown',
-                            subscriberDb: subscriberDb,
-                            subscription_type: isPull ? 'pull' : 'push',
-                            sync_type: 'automatic',
-                            status: 'Active'
-                        };
-                        
-                        this.addUniqueSubscriptions([subscription], allSubscriptions, seenKeys);
-                    }
-                }
-            }
-            
+
             // 7. Final pass to consolidate and clean up subscription information
             this.consolidateSubscriptions(allSubscriptions, actualServerName);
             
