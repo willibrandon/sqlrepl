@@ -6,6 +6,7 @@ import { SubscriptionCommands } from './commands/subscriptionCommands';
 import { AgentCommands } from './commands/agentCommands';
 import { ReplicationExplorer } from './features/replicationExplorer';
 import { registerMonitoringCommands } from './commands/monitoringCommands';
+import { ServerTreeItem, FolderTreeItem, PublicationTreeItem, SubscriptionTreeItem, AgentTreeItem } from './features/treeItems';
 
 export function activate(context: vscode.ExtensionContext) {
     // Log activation
@@ -13,7 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Create and register the tree data provider
     const replicationExplorer = new ReplicationExplorer(context);
-    const treeView = vscode.window.createTreeView('replicationTree', {
+    const treeView = vscode.window.createTreeView<ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem | AgentTreeItem>('replicationTree', {
         treeDataProvider: replicationExplorer,
         showCollapseAll: false // Disable default collapse all button
     });

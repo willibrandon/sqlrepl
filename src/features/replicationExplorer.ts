@@ -47,7 +47,7 @@ export class ReplicationExplorer implements vscode.TreeDataProvider<ServerTreeIt
      * Expands all nodes in the tree view.
      * @param treeView - The VS Code TreeView to expand
      */
-    async expandAll(treeView: vscode.TreeView<any>): Promise<void> {
+    async expandAll(treeView: vscode.TreeView<ServerTreeItem | FolderTreeItem | PublicationTreeItem | SubscriptionTreeItem | AgentTreeItem>): Promise<void> {
         // Get all root nodes (server nodes)
         const connections = ConnectionService.getInstance(this.context).getConnections();
         const serverNodes = connections.map(conn => new ServerTreeItem(conn, vscode.TreeItemCollapsibleState.Expanded));
