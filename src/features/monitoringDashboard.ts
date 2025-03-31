@@ -119,6 +119,11 @@ export class MonitoringDashboard {
                     case 'updateConfig':
                         this.monitoringService.updateConfig(message.config);
                         break;
+                    case 'refreshMonitoring':
+                        // Stop and restart monitoring to trigger an immediate refresh
+                        this.monitoringService.stopMonitoring();
+                        this.monitoringService.startMonitoring();
+                        break;
                 }
             },
             null,
@@ -135,33 +140,20 @@ export class MonitoringDashboard {
      */
     private updateContent(health: ReplicationHealth): void {
         if (!this.panel) {
-            console.log('Cannot update content: panel is undefined');
             return;
         }
 
-        console.log('Updating dashboard content with health data:', {
-            status: health.status,
-            agents: health.agents.length,
-            metrics: health.latencyMetrics.length,
-            tokens: health.tracerTokens.length,
-            stats: health.publicationStats.length
-        });
-
         const config = this.monitoringService.getConfig();
         
-        // Helper function to safely format dates
-        const safeFormatDate = (date: Date | string | number | undefined | null): string => {
+        function safeFormatDate(date: Date | string | undefined): string {
             if (!date) return 'N/A';
             try {
-                if (date instanceof Date) {
-                    return String(date);
-                }
-                return String(new Date(date));
-            } catch (e) {
+                return new Date(date).toLocaleString();
+            } catch {
                 return 'Invalid Date';
             }
-        };
-        
+        }
+
         this.panel.webview.html = `
             <!DOCTYPE html>
             <html lang="en">
@@ -170,161 +162,266 @@ export class MonitoringDashboard {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>SQL Replication Monitor</title>
                 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+                <link href="https://cdn.jsdelivr.net/npm/@vscode/codicons/dist/codicon.css" rel="stylesheet" />
                 <style>
+                    :root {
+                        --card-background: var(--vscode-editor-background);
+                        --card-border: var(--vscode-widget-border);
+                        --text-primary: var(--vscode-editor-foreground);
+                        --text-secondary: var(--vscode-descriptionForeground);
+                        --accent-color: var(--vscode-textLink-foreground);
+                        --error-color: var(--vscode-errorForeground);
+                        --warning-color: var(--vscode-editorWarning-foreground);
+                        --success-color: var(--vscode-testing-iconPassed);
+                        --header-color: var(--vscode-panelTitle-activeForeground);
+                        --button-background: var(--vscode-button-background);
+                        --button-foreground: var(--vscode-button-foreground);
+                        --button-hover: var(--vscode-button-hoverBackground);
+                    }
+
                     body {
-                        font-family: var(--vscode-font-family);
-                        color: var(--vscode-foreground);
                         padding: 20px;
-                        max-width: 1200px;
-                        margin: 0 auto;
+                        color: var(--text-primary);
+                        font-family: var(--vscode-font-family);
+                        line-height: 1.5;
                     }
-                    .header {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        margin-bottom: 20px;
-                    }
-                    .status-badge {
-                        display: inline-block;
-                        padding: 5px 10px;
-                        border-radius: 4px;
-                        font-weight: bold;
-                    }
-                    .status-healthy { background: var(--vscode-testing-iconPassed); color: var(--vscode-testing-runningIconForeground); }
-                    .status-warning { background: var(--vscode-testing-iconSkipped); color: var(--vscode-testing-runningIconForeground); }
-                    .status-critical { background: var(--vscode-testing-iconFailed); color: var(--vscode-testing-runningIconForeground); }
-                    .card {
-                        background: var(--vscode-editor-background);
-                        border: 1px solid var(--vscode-panel-border);
-                        border-radius: 4px;
-                        padding: 15px;
-                        margin-bottom: 15px;
-                    }
-                    .alert {
-                        background: var(--vscode-inputValidation-errorBackground);
-                        border: 1px solid var(--vscode-inputValidation-errorBorder);
-                        color: var(--vscode-inputValidation-errorForeground);
-                        padding: 10px;
-                        margin: 5px 0;
-                        border-radius: 4px;
-                    }
-                    .warning {
-                        background: var(--vscode-inputValidation-warningBackground);
-                        border: 1px solid var(--vscode-inputValidation-warningBorder);
-                        color: var(--vscode-inputValidation-warningForeground);
-                    }
-                    button {
-                        background: var(--vscode-button-background);
-                        color: var(--vscode-button-foreground);
-                        border: none;
-                        padding: 5px 10px;
-                        cursor: pointer;
-                        border-radius: 2px;
-                    }
-                    button:hover {
-                        background: var(--vscode-button-hoverBackground);
-                    }
+
                     .grid {
                         display: grid;
                         grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
                         gap: 20px;
+                        margin-bottom: 20px;
                     }
-                    .agent-grid {
-                        display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-                        gap: 20px;
+
+                    .card {
+                        background: var(--card-background);
+                        border: 1px solid var(--card-border);
+                        border-radius: 6px;
+                        padding: 16px;
+                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                        transition: transform 0.2s, box-shadow 0.2s;
                     }
+
+                    .card:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+                    }
+
+                    h2, h3, h4 {
+                        color: var(--header-color);
+                        margin: 0 0 16px 0;
+                    }
+
                     .metric-value {
-                        font-size: 24px;
+                        font-size: 2em;
                         font-weight: bold;
-                        margin: 10px 0;
+                        color: var(--accent-color);
+                        margin: 8px 0;
                     }
+
                     .metric-label {
-                        font-size: 12px;
-                        color: var(--vscode-descriptionForeground);
+                        color: var(--text-secondary);
+                        font-size: 0.9em;
+                        margin-bottom: 8px;
                     }
+
                     .progress-bar {
-                        width: 100%;
-                        height: 4px;
                         background: var(--vscode-progressBar-background);
-                        margin: 5px 0;
+                        border-radius: 4px;
+                        height: 4px;
+                        margin: 8px 0;
+                        overflow: hidden;
                     }
+
                     .progress-value {
+                        background: var(--accent-color);
                         height: 100%;
-                        background: var(--vscode-progressBar-foreground);
                         transition: width 0.3s ease;
                     }
+
+                    .status-badge {
+                        display: inline-flex;
+                        align-items: center;
+                        padding: 4px 8px;
+                        border-radius: 4px;
+                        font-size: 0.9em;
+                        font-weight: 500;
+                    }
+
+                    .status-badge i {
+                        margin-right: 4px;
+                    }
+
+                    .status-running {
+                        background: color-mix(in srgb, var(--success-color) 15%, transparent);
+                        color: var(--success-color);
+                    }
+
+                    .status-error {
+                        background: color-mix(in srgb, var(--error-color) 15%, transparent);
+                        color: var(--error-color);
+                    }
+
+                    .status-warning {
+                        background: color-mix(in srgb, var(--warning-color) 15%, transparent);
+                        color: var(--warning-color);
+                    }
+
                     .tabs {
                         display: flex;
-                        margin-bottom: 15px;
+                        border-bottom: 1px solid var(--card-border);
+                        margin-bottom: 20px;
                     }
+
                     .tab {
                         padding: 8px 16px;
                         cursor: pointer;
-                        border: 1px solid var(--vscode-panel-border);
-                        margin-right: -1px;
+                        border-bottom: 2px solid transparent;
+                        color: var(--text-secondary);
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
                     }
+
+                    .tab:hover {
+                        color: var(--accent-color);
+                    }
+
                     .tab.active {
-                        background: var(--vscode-button-background);
-                        color: var(--vscode-button-foreground);
+                        color: var(--accent-color);
+                        border-bottom-color: var(--accent-color);
                     }
+
                     .tab-content {
                         display: none;
                     }
+
                     .tab-content.active {
                         display: block;
                     }
+
                     table {
                         width: 100%;
                         border-collapse: collapse;
+                        margin: 16px 0;
                     }
+
                     th, td {
-                        padding: 8px;
                         text-align: left;
-                        border: 1px solid var(--vscode-panel-border);
+                        padding: 8px;
+                        border-bottom: 1px solid var(--card-border);
                     }
+
                     th {
-                        background: var(--vscode-editor-background);
+                        color: var(--header-color);
+                        font-weight: 500;
                     }
+
+                    button {
+                        background: var(--button-background);
+                        color: var(--button-foreground);
+                        border: none;
+                        padding: 6px 12px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 0.9em;
+                        transition: background-color 0.2s;
+                    }
+
+                    button:hover {
+                        background: var(--button-hover);
+                    }
+
+                    .alert {
+                        background: color-mix(in srgb, var(--error-color) 10%, transparent);
+                        border-left: 4px solid var(--error-color);
+                        padding: 12px;
+                        margin: 8px 0;
+                        border-radius: 4px;
+                    }
+
+                    .alert.warning {
+                        background: color-mix(in srgb, var(--warning-color) 10%, transparent);
+                        border-left-color: var(--warning-color);
+                    }
+
+                    .refresh-button {
+                        position: fixed;
+                        bottom: 20px;
+                        right: 20px;
+                        background: var(--button-background);
+                        color: var(--button-foreground);
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        cursor: pointer;
+                        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                        transition: transform 0.2s;
+                    }
+
+                    .refresh-button:hover {
+                        transform: rotate(180deg);
+                    }
+
                     .chart-container {
-                        height: 200px;
+                        height: 300px;
                         margin: 20px 0;
+                    }
+
+                    @media (max-width: 768px) {
+                        .grid {
+                            grid-template-columns: 1fr;
+                        }
                     }
                 </style>
             </head>
             <body>
-                <div class="header">
-                    <h1>SQL Replication Monitor</h1>
-                    <div class="status-badge status-${health.status.toLowerCase()}">
-                        ${health.status}
-                    </div>
-                </div>
-
                 <div class="tabs">
-                    <div class="tab active" id="tab-overview" onclick="showTab('overview')">Overview</div>
-                    <div class="tab" id="tab-agents" onclick="showTab('agents')">Agents</div>
-                    <div class="tab" id="tab-publications" onclick="showTab('publications')">Publications</div>
-                    <div class="tab" id="tab-alerts" onclick="showTab('alerts')">Alerts</div>
-                    <div class="tab" id="tab-settings" onclick="showTab('settings')">Settings</div>
+                    <div id="tab-overview" class="tab active" onclick="showTab('overview')">
+                        <i class="codicon codicon-dashboard"></i>Overview
+                    </div>
+                    <div id="tab-agents" class="tab" onclick="showTab('agents')">
+                        <i class="codicon codicon-server-process"></i>Agents
+                    </div>
+                    <div id="tab-publications" class="tab" onclick="showTab('publications')">
+                        <i class="codicon codicon-database"></i>Publications
+                    </div>
+                    <div id="tab-alerts" class="tab" onclick="showTab('alerts')">
+                        <i class="codicon codicon-warning"></i>Alerts
+                    </div>
+                    <div id="tab-settings" class="tab" onclick="showTab('settings')">
+                        <i class="codicon codicon-settings-gear"></i>Settings
+                    </div>
                 </div>
 
                 <div id="overview" class="tab-content active">
                     <div class="grid">
                         <div class="card">
-                            <h3>Agent Status Summary</h3>
-                            <div class="metric-value">${health.agentStatus.running}</div>
-                            <div class="metric-label">Running Agents</div>
+                            <h3><i class="codicon codicon-server-process"></i> Agent Status</h3>
+                            <div class="metric-value">
+                                <span class="status-badge status-running">
+                                    <i class="codicon codicon-play-circle"></i>${health.agentStatus.running} Running
+                                </span>
+                            </div>
                             <div class="progress-bar">
                                 <div class="progress-value" style="width: ${(health.agentStatus.running / (health.agentStatus.running + health.agentStatus.stopped + health.agentStatus.error)) * 100}%"></div>
                             </div>
                             <div class="metric-label">
-                                ${health.agentStatus.stopped} Stopped | 
-                                ${health.agentStatus.error} Errors
+                                <span class="status-badge">
+                                    <i class="codicon codicon-debug-pause"></i>${health.agentStatus.stopped} Stopped
+                                </span>
+                                <span class="status-badge status-error">
+                                    <i class="codicon codicon-error"></i>${health.agentStatus.error} Errors
+                                </span>
                             </div>
                         </div>
 
                         <div class="card">
-                            <h3>Latency Overview</h3>
+                            <h3><i class="codicon codicon-pulse"></i> Latency Overview</h3>
                             <div class="metric-value">
                                 ${Math.max(...health.latencyMetrics.map(m => m.latencySeconds), 0)}s
                             </div>
@@ -335,83 +432,111 @@ export class MonitoringDashboard {
                         </div>
 
                         <div class="card">
-                            <h3>Active Alerts</h3>
-                            <div class="metric-value">${health.alerts.length}</div>
+                            <h3><i class="codicon codicon-alert"></i> Active Alerts</h3>
+                            <div class="metric-value">
+                                ${health.alerts.length}
+                            </div>
                             <div class="metric-label">
-                                ${health.alerts.filter(a => a.severity === 'Critical').length} Critical |
-                                ${health.alerts.filter(a => a.severity === 'Warning').length} Warnings
+                                <span class="status-badge status-error">
+                                    <i class="codicon codicon-error"></i>${health.alerts.filter(a => a.severity === 'Critical').length} Critical
+                                </span>
+                                <span class="status-badge status-warning">
+                                    <i class="codicon codicon-warning"></i>${health.alerts.filter(a => a.severity === 'Warning').length} Warnings
+                                </span>
                             </div>
                         </div>
                     </div>
 
                     <div class="card">
-                        <h3>Latency Trends</h3>
+                        <h3><i class="codicon codicon-graph-line"></i> Latency Trends</h3>
                         <div class="chart-container">
                             <canvas id="latencyChart"></canvas>
                         </div>
                     </div>
 
                     <div class="card">
-                        <h3>Recent Tracer Tokens</h3>
-                        <table>
-                            <tr>
-                                <th>Publication</th>
-                                <th>Total Latency</th>
-                                <th>Publisher → Distributor</th>
-                                <th>Distributor → Subscriber</th>
-                            </tr>
-                            ${health.tracerTokens.map(token => `
+                        <h3><i class="codicon codicon-history"></i> Recent Tracer Tokens</h3>
+                        <div class="collapsible-content">
+                            <table>
                                 <tr>
-                                    <td>${token.publication}</td>
-                                    <td>${Math.round(token.totalLatencySeconds)}s</td>
-                                    <td>${token.distributorInsertTime && token.publisherInsertTime ? 
-                                        Math.round((new Date(token.distributorInsertTime).getTime() - new Date(token.publisherInsertTime).getTime()) / 1000) : 
-                                        'N/A'}s</td>
-                                    <td>${token.subscriberInsertTime && (token.distributorInsertTime || token.publisherInsertTime) ? 
-                                        Math.round((new Date(token.subscriberInsertTime).getTime() - 
-                                          (token.distributorInsertTime ? new Date(token.distributorInsertTime).getTime() : new Date(token.publisherInsertTime).getTime())) / 1000) : 
-                                        'N/A'}s</td>
+                                    <th>Publication</th>
+                                    <th>Total Latency</th>
+                                    <th>Publisher → Distributor</th>
+                                    <th>Distributor → Subscriber</th>
                                 </tr>
-                            `).join('')}
-                        </table>
+                                ${health.tracerTokens.map(token => `
+                                    <tr>
+                                        <td><i class="codicon codicon-database"></i> ${token.publication}</td>
+                                        <td>${Math.round(token.totalLatencySeconds)}s</td>
+                                        <td>${token.distributorInsertTime && token.publisherInsertTime ? 
+                                            Math.round((new Date(token.distributorInsertTime).getTime() - new Date(token.publisherInsertTime).getTime()) / 1000) : 
+                                            'N/A'}s</td>
+                                        <td>${token.subscriberInsertTime && (token.distributorInsertTime || token.publisherInsertTime) ? 
+                                            Math.round((new Date(token.subscriberInsertTime).getTime() - 
+                                              (token.distributorInsertTime ? new Date(token.distributorInsertTime).getTime() : new Date(token.publisherInsertTime).getTime())) / 1000) : 
+                                            'N/A'}s</td>
+                                    </tr>
+                                `).join('')}
+                            </table>
+                        </div>
                     </div>
                 </div>
 
                 <div id="agents" class="tab-content">
                     ${health.agents && health.agents.length > 0 ? `
-                    <div class="agent-grid">
+                    <div class="grid">
                         ${health.agents.map(agent => `
                             <div class="card">
-                                <h3>${agent.name || 'Unknown Agent'}</h3>
+                                <h3>
+                                    <i class="codicon codicon-${
+                                        agent.type === 'Snapshot' ? 'file-binary' :
+                                        agent.type === 'LogReader' ? 'book' : 'server-process'
+                                    }"></i>
+                                    ${agent.name || 'Unknown Agent'}
+                                </h3>
                                 <div class="metric-label">Type: ${agent.type || 'Unknown'}</div>
-                                <div class="metric-label">Status: <span style="font-weight: bold; color: ${
-                                    agent.status === 'Running' ? 'var(--vscode-testing-iconPassed)' : 
-                                    agent.status === 'Failed' ? 'var(--vscode-testing-iconFailed)' : 
-                                    'var(--vscode-testing-iconSkipped)'
-                                }">${agent.status || 'Unknown'}</span></div>
+                                <div class="metric-label">
+                                    Status: 
+                                    <span class="status-badge ${
+                                        agent.status === 'Running' ? 'status-running' :
+                                        agent.status === 'Failed' ? 'status-error' : ''
+                                    }">
+                                        <i class="codicon codicon-${
+                                            agent.status === 'Running' ? 'play-circle' :
+                                            agent.status === 'Failed' ? 'error' : 'debug-pause'
+                                        }"></i>
+                                        ${agent.status || 'Unknown'}
+                                    </span>
+                                </div>
                                 ${agent.lastStartTime ? `
-                                    <div class="metric-label">Started: ${safeFormatDate(agent.lastStartTime)}</div>
-                                    <div class="metric-label">Duration: ${Math.round(agent.lastRunDuration || 0)}s</div>
+                                    <div class="metric-label">
+                                        <i class="codicon codicon-clock"></i> Started: ${safeFormatDate(agent.lastStartTime)}
+                                    </div>
+                                    <div class="metric-label">
+                                        <i class="codicon codicon-dashboard"></i> Duration: ${Math.round(agent.lastRunDuration || 0)}s
+                                    </div>
                                 ` : ''}
                                 ${agent.errorMessage ? `
-                                    <div class="alert">${agent.errorMessage}</div>
+                                    <div class="alert">
+                                        <i class="codicon codicon-error"></i> ${agent.errorMessage}
+                                    </div>
                                 ` : ''}
-                                <h4>Performance</h4>
+                                <h4><i class="codicon codicon-pulse"></i> Performance</h4>
                                 <div class="metric-value">${Math.round(agent.performance ? agent.performance.commandsPerSecond || 0 : 0)}</div>
                                 <div class="metric-label">Commands/Second</div>
                                 <div class="progress-bar">
                                     <div class="progress-value" style="width: ${agent.performance ? agent.performance.cpuUsagePercent || 0 : 0}%"></div>
                                 </div>
                                 <div class="metric-label">
-                                    CPU: ${Math.round(agent.performance ? agent.performance.cpuUsagePercent || 0 : 0)}% | 
-                                    Memory: ${Math.round(agent.performance ? agent.performance.memoryUsageMB || 0 : 0)}MB
+                                    <i class="codicon codicon-cpu"></i> CPU: ${Math.round(agent.performance ? agent.performance.cpuUsagePercent || 0 : 0)}% | 
+                                    <i class="codicon codicon-memory"></i> Memory: ${Math.round(agent.performance ? agent.performance.memoryUsageMB || 0 : 0)}MB
                                 </div>
                             </div>
                         `).join('')}
                     </div>
                     ` : `
                     <div class="card">
-                        <h3>No Agents Found</h3>
+                        <h3><i class="codicon codicon-info"></i> No Agents Found</h3>
                         <p>No replication agents were detected on the server.</p>
                     </div>
                     `}
@@ -527,38 +652,32 @@ export class MonitoringDashboard {
                     </div>
                 </div>
 
+                <div class="refresh-button" onclick="refreshMonitoring()">
+                    <i class="codicon codicon-refresh"></i>
+                </div>
+
                 <script>
                     const vscode = acquireVsCodeApi();
+                    let currentTab = 'overview';
 
-                    function clearAlert(alertId) {
+                    function refreshMonitoring() {
+                        // Send message to extension to refresh monitoring data
                         vscode.postMessage({
-                            command: 'clearAlert',
-                            alertId: alertId
+                            command: 'refreshMonitoring'
                         });
-                    }
-
-                    async function updateConfig() {
-                        const newConfig = {
-                            maxLatencyWarningThreshold: parseInt(await prompt('Warning Latency Threshold (seconds):', '${config.maxLatencyWarningThreshold}')),
-                            maxLatencyCriticalThreshold: parseInt(await prompt('Critical Latency Threshold (seconds):', '${config.maxLatencyCriticalThreshold}')),
-                            maxPendingCommandsWarningThreshold: parseInt(await prompt('Warning Pending Commands Threshold:', '${config.maxPendingCommandsWarningThreshold}')),
-                            maxPendingCommandsCriticalThreshold: parseInt(await prompt('Critical Pending Commands Threshold:', '${config.maxPendingCommandsCriticalThreshold}')),
-                            pollingIntervalMs: parseInt(await prompt('Polling Interval (milliseconds):', '${config.pollingIntervalMs}')),
-                            enableTracerTokens: (await prompt('Enable Tracer Tokens (true/false):', '${config.enableTracerTokens}')) === 'true',
-                            tracerTokenIntervalMinutes: parseInt(await prompt('Tracer Token Interval (minutes):', '${config.tracerTokenIntervalMinutes}')),
-                            historyRetentionCount: parseInt(await prompt('History Retention Count:', '${config.historyRetentionCount}')),
-                            alertRetentionHours: parseInt(await prompt('Alert Retention Hours:', '${config.alertRetentionHours}'))
-                        };
-
-                        if (Object.values(newConfig).every(v => !isNaN(v))) {
-                            vscode.postMessage({
-                                command: 'updateConfig',
-                                config: newConfig
-                            });
-                        }
+                        
+                        // Add visual feedback for the refresh action
+                        const refreshBtn = document.querySelector('.refresh-button');
+                        refreshBtn.style.transform = 'rotate(180deg)';
+                        setTimeout(() => {
+                            refreshBtn.style.transform = 'rotate(0deg)';
+                        }, 500);
                     }
 
                     function showTab(tabId) {
+                        // Update current tab
+                        currentTab = tabId;
+                        
                         // Remove active class from all content panels
                         document.querySelectorAll('.tab-content').forEach(function(content) {
                             content.classList.remove('active');
@@ -580,7 +699,16 @@ export class MonitoringDashboard {
                         if (targetTab) {
                             targetTab.classList.add('active');
                         }
+
+                        // Store the current tab
+                        vscode.setState({ currentTab: tabId });
                     }
+
+                    // Initialize Chart.js with VS Code theming
+                    Chart.defaults.color = getComputedStyle(document.documentElement)
+                        .getPropertyValue('--vscode-editor-foreground');
+                    Chart.defaults.borderColor = getComputedStyle(document.documentElement)
+                        .getPropertyValue('--vscode-widget-border');
 
                     // Initialize latency chart
                     const ctx = document.getElementById('latencyChart').getContext('2d');
@@ -603,17 +731,44 @@ export class MonitoringDashboard {
                                 label: d.label,
                                 data: d.data,
                                 fill: false,
-                                tension: 0.4
+                                tension: 0.4,
+                                borderWidth: 2
                             }))
                         },
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
+                            interaction: {
+                                intersect: false,
+                                mode: 'index'
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: {
+                                        usePointStyle: true,
+                                        padding: 15
+                                    }
+                                },
+                                tooltip: {
+                                    backgroundColor: 'var(--vscode-editor-background)',
+                                    titleColor: 'var(--vscode-editor-foreground)',
+                                    bodyColor: 'var(--vscode-editor-foreground)',
+                                    borderColor: 'var(--vscode-widget-border)',
+                                    borderWidth: 1
+                                }
+                            },
                             scales: {
                                 x: {
                                     type: 'time',
                                     time: {
-                                        unit: 'minute'
+                                        unit: 'minute',
+                                        displayFormats: {
+                                            minute: 'HH:mm'
+                                        }
+                                    },
+                                    grid: {
+                                        display: false
                                     }
                                 },
                                 y: {
@@ -626,6 +781,12 @@ export class MonitoringDashboard {
                             }
                         }
                     });
+
+                    // Restore last active tab
+                    const state = vscode.getState();
+                    if (state && state.currentTab) {
+                        showTab(state.currentTab);
+                    }
                 </script>
             </body>
             </html>
