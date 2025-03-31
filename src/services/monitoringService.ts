@@ -547,13 +547,11 @@ export class MonitoringService {
                         USE distribution
                         SELECT COUNT(*) as count
                         FROM dbo.MSsubscriptions s
-                        WHERE publisher_db = '${pub.publisher_db}'
-                        AND publication_id IN (
-                            SELECT publication_id 
-                            FROM dbo.MSpublications 
-                            WHERE publisher_db = '${pub.publisher_db}'
-                            AND publication = '${pub.publication}'
-                        )
+                        INNER JOIN dbo.MSpublications p ON s.publication_id = p.publication_id
+                        WHERE p.publisher_db = '${pub.publisher_db}'
+                        AND p.publication = '${pub.publication}'
+                        AND s.subscription_type IN (0, 1)  -- 0=Push, 1=Pull
+                        AND s.status = 2  -- Active subscriptions only
                     `);
 
                     // Get article count using the correct column names
@@ -593,50 +591,16 @@ export class MonitoringService {
                 }
             }));
             
-            // If no publications were found, add some fallback data
+            // If no publications were found, return empty array
             if (stats.length === 0) {
-                console.log('No publication stats found, adding fallback stats for display purposes');
-                
-                return [
-                    {
-                        name: 'SamplePublication1',
-                        subscriptionCount: 3,
-                        articleCount: 15,
-                        totalCommandsDelivered: 125000,
-                        averageCommandSize: 2048,
-                        retentionPeriod: 72,
-                        transactionsPerSecond: 4.5
-                    },
-                    {
-                        name: 'SamplePublication2',
-                        subscriptionCount: 2,
-                        articleCount: 8,
-                        totalCommandsDelivered: 75000,
-                        averageCommandSize: 1536,
-                        retentionPeriod: 48,
-                        transactionsPerSecond: 2.8
-                    }
-                ];
+                console.log('No publication stats found');
+                return [];
             }
             
             return stats;
         } catch (error) {
             console.error('Failed to get publication stats:', error);
-            
-            // Even if there's an error, return some fallback data
-            console.log('Error occurred, adding fallback publication stats for display purposes');
-            
-            return [
-                {
-                    name: 'ErrorPublication',
-                    subscriptionCount: 1,
-                    articleCount: 10,
-                    totalCommandsDelivered: 50000,
-                    averageCommandSize: 1024,
-                    retentionPeriod: 24,
-                    transactionsPerSecond: 3.2
-                }
-            ];
+            return [];
         }
     }
 
