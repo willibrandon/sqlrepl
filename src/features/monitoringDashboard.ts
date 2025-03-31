@@ -124,6 +124,9 @@ export class MonitoringDashboard {
                         this.monitoringService.stopMonitoring();
                         this.monitoringService.startMonitoring();
                         break;
+                    case 'insertTracerToken':
+                        await this.monitoringService.insertTracerToken(message.publicationName);
+                        break;
                 }
             },
             null,
@@ -543,42 +546,27 @@ export class MonitoringDashboard {
                 </div>
 
                 <div id="publications" class="tab-content">
-                    <div class="grid">
-                        ${health.publicationStats.map(pub => `
-                            <div class="card">
-                                <h3>${pub.name}</h3>
-                                <div class="metric-value">${pub.transactionsPerSecond.toFixed(1)}</div>
-                                <div class="metric-label">Transactions/Second</div>
-                                <div class="metric-label">
-                                    ${pub.subscriptionCount} Subscriptions | 
-                                    ${pub.articleCount} Articles
-                                </div>
-                                <div class="metric-label">
-                                    Commands Delivered: ${String(pub.totalCommandsDelivered)}<br>
-                                    Avg Command Size: ${Math.round(pub.averageCommandSize)} bytes<br>
-                                    Retention: ${pub.retentionPeriod}h
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-
                     <div class="card">
-                        <h3>Latency by Publication</h3>
+                        <h3>Publications</h3>
                         <table>
                             <tr>
-                                <th>Publication</th>
-                                <th>Subscriber</th>
-                                <th>Latency</th>
-                                <th>Pending Commands</th>
-                                <th>Delivery Rate</th>
+                                <th>Name</th>
+                                <th>Articles</th>
+                                <th>Subscriptions</th>
+                                <th>Commands/sec</th>
+                                <th>Actions</th>
                             </tr>
-                            ${health.latencyMetrics.map(metric => `
+                            ${health.publicationStats.map(pub => `
                                 <tr>
-                                    <td>${metric.publication}</td>
-                                    <td>${metric.subscriber}.${metric.subscriberDb}</td>
-                                    <td>${Math.round(metric.latencySeconds)}s</td>
-                                    <td>${String(metric.pendingCommandCount)}</td>
-                                    <td>${Math.round(metric.deliveryRate)} cmd/s</td>
+                                    <td>${pub.name}</td>
+                                    <td>${pub.articleCount}</td>
+                                    <td>${pub.subscriptionCount}</td>
+                                    <td>${pub.transactionsPerSecond.toFixed(2)}</td>
+                                    <td>
+                                        <button onclick="insertTracerToken('${pub.name}')">
+                                            <i class="codicon codicon-pulse"></i> Insert Tracer Token
+                                        </button>
+                                    </td>
                                 </tr>
                             `).join('')}
                         </table>
@@ -629,14 +617,6 @@ export class MonitoringDashboard {
                             <tr>
                                 <td>Polling Interval</td>
                                 <td>${config.pollingIntervalMs / 1000}s</td>
-                            </tr>
-                            <tr>
-                                <td>Tracer Tokens</td>
-                                <td>${config.enableTracerTokens ? 'Enabled' : 'Disabled'}</td>
-                            </tr>
-                            <tr>
-                                <td>Tracer Token Interval</td>
-                                <td>${config.tracerTokenIntervalMinutes}m</td>
                             </tr>
                             <tr>
                                 <td>History Retention</td>
@@ -702,6 +682,13 @@ export class MonitoringDashboard {
 
                         // Store the current tab
                         vscode.setState({ currentTab: tabId });
+                    }
+
+                    function insertTracerToken(publicationName) {
+                        vscode.postMessage({
+                            command: 'insertTracerToken',
+                            publicationName: publicationName
+                        });
                     }
 
                     // Initialize Chart.js with VS Code theming

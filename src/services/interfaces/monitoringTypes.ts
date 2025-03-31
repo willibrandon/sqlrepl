@@ -136,10 +136,6 @@ export interface MonitoringConfig {
     maxPendingCommandsCriticalThreshold: number;
     /** How often to poll for updates in milliseconds */
     pollingIntervalMs: number;
-    /** Enable tracer token monitoring */
-    enableTracerTokens: boolean;
-    /** Tracer token insertion interval in minutes */
-    tracerTokenIntervalMinutes: number;
     /** Number of historical data points to keep */
     historyRetentionCount: number;
     /** Alert retention period in hours */

@@ -14,7 +14,6 @@ export class MonitoringService {
     private static instance: MonitoringService;
     private sqlService: SqlService;
     private pollingInterval?: NodeJS.Timeout;
-    private tracerTokenInterval?: NodeJS.Timeout;
     private alerts: Map<string, ReplicationAlert>;
     private config: MonitoringConfig;
     private latencyHistory: Map<string, { timestamp: Date; latencySeconds: number }[]>;
@@ -33,8 +32,6 @@ export class MonitoringService {
             maxPendingCommandsWarningThreshold: 10000,
             maxPendingCommandsCriticalThreshold: 50000,
             pollingIntervalMs: 60000, // 1 minute
-            enableTracerTokens: true,
-            tracerTokenIntervalMinutes: 15,
             historyRetentionCount: 100,
             alertRetentionHours: 24
         };
@@ -84,20 +81,6 @@ export class MonitoringService {
         this.pollingInterval = setInterval(() => {
             void this.checkHealth();
         }, this.config.pollingIntervalMs);
-        
-        // Set up tracer token monitoring
-        this.setupTracerTokenMonitoring();
-    }
-
-    /**
-     * Sets up tracer token monitoring if enabled
-     */
-    private setupTracerTokenMonitoring(): void {
-        if (this.config.enableTracerTokens) {
-            this.tracerTokenInterval = setInterval(() => {
-                void this.insertAndMonitorTracerTokens();
-            }, this.config.tracerTokenIntervalMinutes * 60 * 1000);
-        }
     }
 
     /**
@@ -108,9 +91,105 @@ export class MonitoringService {
             clearInterval(this.pollingInterval);
             this.pollingInterval = undefined;
         }
-        if (this.tracerTokenInterval) {
-            clearInterval(this.tracerTokenInterval);
-            this.tracerTokenInterval = undefined;
+    }
+
+    /**
+     * Manually insert a tracer token for a specific publication.
+     * This follows the SQL Server Replication Monitor approach.
+     * @param publicationName The name of the publication to insert a tracer token for
+     */
+    public async insertTracerToken(publicationName: string): Promise<void> {
+        try {
+            const connectionService = ConnectionService.getInstance();
+            const connections = connectionService.getConnections();
+            
+            for (const connection of connections) {
+                try {
+                    // First check if the publication exists using sp_helpPublication
+                    const pubExists = await this.sqlService.executeQuery<{ name: string }>(
+                        connection,
+                        `EXEC sp_helpPublication @publication = '${publicationName}'`
+                    );
+
+                    if (pubExists && pubExists.length > 0) {
+                        // We found the publication, execute the tracer token here
+                        const result = await this.sqlService.executeQuery<{ tracer_id: number }>(
+                            connection,
+                            `DECLARE @tracer_id int;
+                             EXEC sp_posttracertoken 
+                                 @publication = '${publicationName}',
+                                 @tracer_token_id = @tracer_id OUTPUT;
+                             SELECT @tracer_id as tracer_id;`
+                        );
+                        
+                        console.log('Tracer token result:', result);
+                        
+                        void vscode.window.showInformationMessage(
+                            `Tracer token sent for publication ${publicationName}`
+                        );
+                        
+                        // Trigger an immediate health check to update the UI
+                        void this.checkHealth();
+                        return;
+                    }
+
+                    // If not found in current database, try finding it in distribution
+                    const pubInfo = await this.sqlService.executeQuery<{ publisher_db: string }>(
+                        connection,
+                        `USE distribution;
+                         SELECT DISTINCT publisher_db 
+                         FROM dbo.MSpublications 
+                         WHERE publication = '${publicationName}'`
+                    );
+
+                    if (!pubInfo || pubInfo.length === 0) {
+                        console.error(`Publication ${publicationName} not found in distribution database`);
+                        continue;
+                    }
+
+                    const publisherDb = pubInfo[0].publisher_db;
+                    console.log(`Found publisher database: ${publisherDb} for publication: ${publicationName}`);
+
+                    // Execute sp_posttracertoken in the publisher database
+                    const result = await this.sqlService.executeQuery<{ tracer_id: number }>(
+                        {
+                            ...connection,
+                            database: publisherDb
+                        },
+                        `DECLARE @tracer_id int;
+                         EXEC sp_posttracertoken 
+                             @publication = '${publicationName}',
+                             @tracer_token_id = @tracer_id OUTPUT;
+                         SELECT @tracer_id as tracer_id;`
+                    );
+                    
+                    console.log('Tracer token result:', result);
+                    
+                    void vscode.window.showInformationMessage(
+                        `Tracer token sent for publication ${publicationName}`
+                    );
+                    
+                    void this.checkHealth();
+                    return;
+                } catch (error) {
+                    console.error('Error details:', error);
+                    console.error('Connection details:', {
+                        server: connection.serverName,
+                        database: connection.database
+                    });
+                    
+                    if (connection === connections[connections.length - 1]) {
+                        void vscode.window.showErrorMessage(
+                            `Error inserting tracer token: ${error instanceof Error ? error.message : String(error)}`
+                        );
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Failed to insert tracer token:', error);
+            void vscode.window.showErrorMessage(
+                `Failed to send tracer token for publication ${publicationName}: ${error instanceof Error ? error.message : String(error)}`
+            );
         }
     }
 
@@ -562,32 +641,6 @@ export class MonitoringService {
     }
 
     /**
-     * Inserts and monitors tracer tokens
-     */
-    private async insertAndMonitorTracerTokens(): Promise<void> {
-        try {
-            const connectionService = ConnectionService.getInstance();
-            const connections = connectionService.getConnections();
-            
-            for (const connection of connections) {
-                const publications = await this.sqlService.executeQuery<{ publication_id: number }>(
-                    connection,
-                    'SELECT publication_id FROM distribution.dbo.MSpublications'
-                );
-
-                for (const pub of publications) {
-                    await this.sqlService.executeQuery(
-                        connection,
-                        `EXEC sp_posttracertoken @publication_id = ${pub.publication_id}`
-                    );
-                }
-            }
-        } catch (error) {
-            console.error('Failed to insert tracer tokens:', error);
-        }
-    }
-
-    /**
      * Gets tracer token results
      */
     private async getTracerTokenResults(connection: SqlServerConnection): Promise<TracerTokenResult[]> {
@@ -885,18 +938,16 @@ export class MonitoringService {
                 }
 
                 // Get tracer token results
-                if (this.config.enableTracerTokens) {
-                    const tokens = await this.getTracerTokenResults(connection);
-                    console.log(`Found ${tokens.length} tracer tokens for ${connection.serverName}`);
-                    health.tracerTokens.push(...tokens);
+                const tokens = await this.getTracerTokenResults(connection);
+                console.log(`Found ${tokens.length} tracer tokens for ${connection.serverName}`);
+                health.tracerTokens.push(...tokens);
 
-                    // Check tracer token latency
-                    for (const token of tokens) {
-                        if (token.totalLatencySeconds > this.config.maxLatencyCriticalThreshold) {
-                            this.createAlert('Critical', `High tracer token latency (${Math.round(token.totalLatencySeconds / 60)} minutes) for publication ${token.publication}`, {
-                                publication: token.publication
-                            }, 'Latency', 'Investigate replication bottlenecks and consider optimization.');
-                        }
+                // Check tracer token latency
+                for (const token of tokens) {
+                    if (token.totalLatencySeconds > this.config.maxLatencyCriticalThreshold) {
+                        this.createAlert('Critical', `High tracer token latency (${Math.round(token.totalLatencySeconds / 60)} minutes) for publication ${token.publication}`, {
+                            publication: token.publication
+                        }, 'Latency', 'Investigate replication bottlenecks and consider optimization.');
                     }
                 }
 
