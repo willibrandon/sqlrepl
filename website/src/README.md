@@ -1,6 +1,6 @@
 # SQL Replication Extension for VS Code
 
-Welcome to the SQL Replication Extension for Visual Studio Code! This extension makes it easy to manage SQL Server replication directly from your favorite IDE.
+A Visual Studio Code extension that provides comprehensive SQL Server Replication management capabilities directly within your IDE. Built with insights from years of SQL Server replication experience and community contributions.
 
 ## Features
 
